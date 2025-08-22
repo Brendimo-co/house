@@ -7,8 +7,9 @@
 html,body{height:100%}
 body{
   margin:0;
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;
+  font-family:system-ui,-apple-system, Segoe UI, Roboto, Arial;
   background:var(--bg); color:var(--text);
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
 }
 .container{max-width:880px;margin:40px auto;padding:24px}
 .header h1{margin:0 0 8px;font-size:28px;font-weight:700}
@@ -54,6 +55,7 @@ button.ghost{background:transparent;border:1px solid #293145;color:#d3dae6}
 .warn{margin-top:8px;color:var(--warn);min-height:18px;font-size:13px}
 .invalid{border-color:var(--error)!important;box-shadow:0 0 0 3px rgba(239,68,68,.2)!important}
 
+.footer{margin-top:18px;color:#97a3b8}
 
 /* ===== Mobile enhancements ===== */
 @media (max-width: 540px){
@@ -65,6 +67,4 @@ button.ghost{background:transparent;border:1px solid #293145;color:#d3dae6}
   .field .hint { font-size: 12px; }
   .lock { padding: 12px 14px; }
 }
-
-/* Improve tap targets generally */
 button, .lock { min-height: 44px; }
