@@ -1,81 +1,70 @@
-/* style.css */
-body {
-  font-family: sans-serif;
-  margin: 0;
-  padding: 1em;
-  background: #f5f5f5;
+:root{
+  --bg:#0b0c0f; --card:#12141a; --muted:#a3adbd;
+  --text:#eef2f6; --accent:#3b82f6; --accent-press:#2563eb;
+  --ring:rgba(59,130,246,.45); --success:#22c55e; --error:#ef4444; --warn:#f59e0b;
 }
-.container {
-  max-width: 500px;
-  margin: auto;
-  background: white;
-  padding: 1em;
-  border-radius: 8px;
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:system-ui,-apple-system, Segoe UI, Roboto, Arial;
+  background:var(--bg); color:var(--text);
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
 }
-h1 {
-  text-align: center;
+.container{max-width:880px;margin:40px auto;padding:24px}
+.header h1{margin:0 0 8px;font-size:28px;font-weight:700}
+.sub{margin:0 0 16px;color:var(--muted)}
+form{
+  background:var(--card); border:1px solid #1f2430; border-radius:16px; padding:20px;
+  box-shadow:0 4px 20px rgba(0,0,0,.2);
 }
-form label {
-  display: block;
-  margin-bottom: 1em;
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media (max-width:900px){.grid{grid-template-columns:1fr 1fr}}
+@media (max-width:640px){.grid{grid-template-columns:1fr}}
+
+.field{display:flex;flex-direction:column;gap:6px}
+.field span{font-size:12px;color:var(--muted)}
+.field .hint{color:var(--muted);font-size:11px;margin-top:4px}
+
+input[type="text"],input[type="number"],input[type="file"]{
+  background:#0e1117;color:var(--text);border:1px solid #232938;border-radius:12px;
+  padding:12px 12px;outline:none;transition:border .15s, box-shadow .15s;
 }
-input, textarea {
-  width: 100%;
-  padding: 0.5em;
-  margin-top: 0.25em;
-  box-sizing: border-box;
-  font-size: 1em;
+input:focus{border-color:var(--accent);box-shadow:0 0 0 4px var(--ring)}
+input[readonly]{background:#0d1015;color:#d3dae6}
+
+.field-inline .inline{display:flex;gap:8px;align-items:center}
+.lock{
+  background:transparent;border:1px solid #293145;color:#d3dae6;border-radius:10px;
+  padding:10px 12px;cursor:pointer;transition:transform .02s, background .15s;
 }
-input[readonly] {
-  background: #e0e0e0;
+.lock:active{transform:translateY(1px)}
+.lock[aria-pressed="false"]{border-color:#35518a}
+
+.actions{margin-top:16px;display:flex;gap:10px}
+button{
+  appearance:none;border:0;border-radius:12px;padding:12px 16px;font-weight:700;cursor:pointer;
+  background:var(--accent);color:white;transition:background .15s, transform .02s;
 }
-.total-group {
-  display: flex;
+button:active{transform:translateY(1px);background:var(--accent-press)}
+button.ghost{background:transparent;border:1px solid #293145;color:#d3dae6}
+
+.toast{margin-top:10px;font-size:14px;min-height:20px;color:var(--muted)}
+.toast.ok{color:var(--success)}
+.toast.err{color:var(--error)}
+.warn{margin-top:8px;color:var(--warn);min-height:18px;font-size:13px}
+.invalid{border-color:var(--error)!important;box-shadow:0 0 0 3px rgba(239,68,68,.2)!important}
+
+.footer{margin-top:18px;color:#97a3b8}
+
+/* ===== Mobile enhancements ===== */
+@media (max-width: 540px){
+  .container { padding: 12px; margin: 20px auto; }
+  .grid { grid-template-columns: 1fr; gap: 12px; }
+  input[type="text"], input[type="number"], input[type="file"] { padding: 14px 14px; font-size: 16px; }
+  .actions { flex-direction: column; }
+  .actions button { width: 100%; padding: 14px 18px; font-size: 16px; }
+  .field .hint { font-size: 12px; }
+  .lock { padding: 12px 14px; }
 }
-#toggleTotal {
-  margin-left: 0.5em;
-  font-size: 1.2em;
-}
-.warning {
-  color: red;
-  font-size: 0.9em;
-  height: 1em;
-}
-button[type="submit"] {
-  width: 100%;
-  padding: 0.75em;
-  font-size: 1em;
-  background: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-}
-button[type="submit"]:active {
-  background: #0056b3;
-}
-.toast {
-  visibility: hidden;
-  min-width: 200px;
-  background-color: #333;
-  color: #fff;
-  text-align: center;
-  border-radius: 2px;
-  padding: 0.5em;
-  position: fixed;
-  bottom: 1em;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-}
-.toast.show {
-  visibility: visible;
-  animation: fadein 0.5s, fadeout 0.5s 2.5s;
-}
-@keyframes fadein {
-  from {bottom: 0; opacity: 0;}
-  to {bottom: 1em; opacity: 1;}
-}
-@keyframes fadeout {
-  from {bottom: 1em; opacity: 1;}
-  to {bottom: 0; opacity: 0;}
-}
+button, .lock { min-height: 44px; }
