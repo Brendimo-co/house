@@ -53,3 +53,18 @@ button.ghost{background:transparent;border:1px solid #293145;color:#d3dae6}
 .toast.err{color:var(--error)}
 .warn{margin-top:8px;color:var(--warn);min-height:18px;font-size:13px}
 .invalid{border-color:var(--error)!important;box-shadow:0 0 0 3px rgba(239,68,68,.2)!important}
+
+
+/* ===== Mobile enhancements ===== */
+@media (max-width: 540px){
+  .container { padding: 12px; margin: 20px auto; }
+  .grid { grid-template-columns: 1fr; gap: 12px; }
+  input[type="text"], input[type="number"], input[type="file"] { padding: 14px 14px; font-size: 16px; }
+  .actions { flex-direction: column; }
+  .actions button { width: 100%; padding: 14px 18px; font-size: 16px; }
+  .field .hint { font-size: 12px; }
+  .lock { padding: 12px 14px; }
+}
+
+/* Improve tap targets generally */
+button, .lock { min-height: 44px; }
