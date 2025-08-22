@@ -1,5 +1,9 @@
-// Replace with your Apps Script Web App URL (Deploy > New deployment > Web app)
-const GAS_ENDPOINT = "https://script.google.com/macros/s/AKfycbztbYAWNy4oYvwWL2VFJSAtdFFEpqMPVIH1zK-wt9sOvC8uqC2oOZDAcywrUVkbGRRYgg/exec";
+/**
+ * CONFIG — fill these before testing
+ */
+const GAS_ENDPOINT = "https://script.google.com/macros/s/AKfycbwEEMWc7wIJgVcNPfZZLuHdTp8qmmyKlDOR6OXz_rh90_SDmbfYosWl68IY8nnmTicrNg/exec"; // Web App URL ending with /exec
+const SHARED_SECRET = "change_me_please";   // must match server
+const USER_EMAIL = "";                      // optional for now (e.g., "pm@yourcompany.az")
+// Once Google Login is added, you’ll set USER_EMAIL dynamically after sign-in.
 
-// Optional simple shared secret to block random posts (set the same on server)
-const SHARED_SECRET = "change_me_please";
+const CLIENT_VERSION = "cost-v2.1.0";
