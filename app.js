@@ -19,6 +19,7 @@
     ver: $("ver")
   };
 
+  // version display
   if (f.ver) f.ver.textContent = (typeof CLIENT_VERSION !== "undefined" ? CLIENT_VERSION : "");
 
   let totalLocked = true; // 🔒 default
@@ -29,6 +30,9 @@
   const toast = (msg, ok) => {
     f.toast.className = "toast " + (ok===true ? "ok" : ok===false ? "err" : "");
     f.toast.textContent = msg || "";
+    if (msg) {
+      setTimeout(()=>{ f.toast.textContent = ""; f.toast.className="toast"; }, 3000);
+    }
   };
 
   function calcTotalAuto(){ return num(f.qty.value) * num(f.unitPrice.value); }
@@ -39,20 +43,23 @@
     }
     let t = num(f.total.value);
     let d = num(f.discountAZN.value);
-    if (d > t){ d = t; f.discountAZN.value = money(d); setWarn("Endirim cəmdən çox ola bilməz; avtomatik düzəldildi."); }
-    else setWarn("");
+    if (d > t){ 
+      d = t; 
+      f.discountAZN.value = money(d); 
+      setWarn("Endirim cəmdən çox ola bilməz; avtomatik düzəldildi."); 
+    } else setWarn("");
     f.payable.value = money(Math.max(0, t - d));
   }
 
   // Inputs → recalc
   ["qty","unitPrice","discountAZN","total"].forEach(id=>{
     $(id).addEventListener("input", () => {
-      if (id === "total" && totalLocked) return; // ignore manual edits while locked
+      if (id === "total" && totalLocked) return; 
       recalc();
     });
   });
 
-  // Lock/unlock
+  // Lock/unlock button
   f.lockBtn.addEventListener("click", () => {
     totalLocked = !totalLocked;
     f.lockBtn.setAttribute("aria-pressed", (!totalLocked).toString());
@@ -61,16 +68,22 @@
     if (totalLocked) { f.total.classList.remove("invalid"); recalc(); }
   });
 
+  // Reset button
   f.resetBtn.addEventListener("click", () => {
     f.form.reset();
-    totalLocked = true;
-    f.lockBtn.setAttribute("aria-pressed", "true");
-    f.lockBtn.textContent = "🔒";
-    toast(""); setWarn("");
-    recalc();
+    resetFormUI();
   });
 
-  // ---- Image compression (mobile-friendly & fast uploads)
+  function resetFormUI(){
+    totalLocked = true;
+    f.lockBtn.setAttribute("aria-pressed","true");
+    f.lockBtn.textContent = "🔒";
+    toast(""); setWarn("");
+    f.total.value = "";
+    f.payable.value = "";
+  }
+
+  // ---- Image compression for mobile
   async function compressImage(file, maxW = 1600, maxH = 1600, quality = 0.8){
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -98,7 +111,7 @@
   async function fileToBase64(file) {
     if (!file) return null;
     const compressed = await compressImage(file, 1600, 1600, 0.8);
-    const maxBytes = 8 * 1024 * 1024; // 8MB guard
+    const maxBytes = 8 * 1024 * 1024;
     if (compressed.size > maxBytes) throw new Error("Şəkil 8MB-dan böyükdür.");
     const buf = await compressed.arrayBuffer();
     let binary = "";
@@ -128,7 +141,7 @@
     e.preventDefault();
     toast(""); setWarn("");
 
-    if (!GAS_ENDPOINT || GAS_ENDPOINT.includes("XXXXXXXX")) {
+    if (typeof GAS_ENDPOINT === "undefined") {
       toast("Server URL (GAS_ENDPOINT) düzgün deyil. config.js faylını yeniləyin.", false);
       return;
     }
@@ -174,10 +187,7 @@
       if (data?.ok){
         toast("Yadda saxlandı ✔", true);
         f.form.reset();
-        totalLocked = true;
-        f.lockBtn.setAttribute("aria-pressed","true");
-        f.lockBtn.textContent = "🔒";
-        recalc();
+        resetFormUI();
       } else {
         throw new Error(data?.error || "Naməlum xəta");
       }
