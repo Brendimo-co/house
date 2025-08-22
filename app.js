@@ -1,51 +1,99 @@
 (function () {
-  const el = (id) => document.getElementById(id);
-  const name = el("name");
-  const unit = el("unit");
-  const qty = el("qty");
-  const unitPrice = el("unitPrice");
-  const total = el("total");
-  const discountPct = el("discountPct");
-  const discounted = el("discounted");
-  const receipt = el("receipt");
-  const notes = el("notes");
-  const toast = el("toast");
-  const form = document.getElementById("costForm");
-  const submitBtn = el("submitBtn");
-  const resetBtn = el("resetBtn");
+  // Shortcuts
+  const $ = (id) => document.getElementById(id);
+  const f = {
+    name: $("name"),
+    unit: $("unit"),
+    qty: $("qty"),
+    unitPrice: $("unitPrice"),
+    total: $("total"),
+    lockBtn: $("lockBtn"),
+    discountAZN: $("discountAZN"),
+    payable: $("payable"),
+    receipt: $("receipt"),
+    notes: $("notes"),
+    form: document.getElementById("costForm"),
+    submitBtn: $("submitBtn"),
+    resetBtn: $("resetBtn"),
+    toast: $("toast"),
+    warn: $("warn")
+  };
 
-  function money(n) {
+  let totalLocked = true; // 🔒 default
+
+  function money(n){
     if (isNaN(n) || n === null) return "";
     return Number(n).toFixed(2);
   }
+  function num(v){ return parseFloat(v) || 0; }
 
-  function recalc() {
-    const q = parseFloat(qty.value) || 0;
-    const p = parseFloat(unitPrice.value) || 0;
-    const t = q * p;
-    total.value = money(t);
-
-    const d = parseFloat(discountPct.value) || 0;
-    const disc = d > 0 ? t * (1 - d / 100) : t;
-    discounted.value = money(disc);
+  function setWarn(msg=""){ f.warn.textContent = msg || ""; }
+  function toast(msg, ok){
+    f.toast.className = "toast " + (ok===true ? "ok" : ok===false ? "err" : "");
+    f.toast.textContent = msg || "";
   }
 
-  qty.addEventListener("input", recalc);
-  unitPrice.addEventListener("input", recalc);
-  discountPct.addEventListener("input", recalc);
+  function calcTotalAuto(){
+    return num(f.qty.value) * num(f.unitPrice.value);
+  }
 
-  resetBtn.addEventListener("click", () => {
-    form.reset();
+  function recalc(){
+    // total
+    if (totalLocked){
+      const t = calcTotalAuto();
+      f.total.value = money(Math.max(0, t));
+    }
+    // payable
+    let tval = num(f.total.value);
+    let disc = num(f.discountAZN.value);
+    if (disc > tval){
+      disc = tval;
+      f.discountAZN.value = money(disc);
+      setWarn("Endirim cəmdən çox ola bilməz; avtomatik düzəldildi.");
+    } else {
+      setWarn("");
+    }
+    const pay = Math.max(0, tval - disc);
+    f.payable.value = money(pay);
+  }
+
+  // Events for live calc
+  ["qty","unitPrice","discountAZN","total"].forEach(id=>{
+    $(id).addEventListener("input", () => {
+      // When locked, ignore manual typing into total (we’ll immediately overwrite).
+      if (id === "total" && totalLocked) return;
+      recalc();
+    });
+  });
+
+  // Lock/unlock behavior
+  f.lockBtn.addEventListener("click", () => {
+    totalLocked = !totalLocked;
+    f.lockBtn.setAttribute("aria-pressed", (!totalLocked).toString());
+    f.lockBtn.textContent = totalLocked ? "🔒" : "🔓";
+    f.lockBtn.setAttribute("aria-label", totalLocked ? "Cəm qiymət kilidli" : "Cəm qiymət açıq");
+    if (totalLocked) {
+      // when re-locking, force recalc from qty*unitPrice
+      f.total.classList.remove("invalid");
+      recalc();
+    }
+  });
+
+  f.resetBtn.addEventListener("click", () => {
+    f.form.reset();
+    totalLocked = true;
+    f.lockBtn.setAttribute("aria-pressed", "true");
+    f.lockBtn.textContent = "🔒";
+    toast(""); setWarn("");
     recalc();
-    toast.className = "toast";
-    toast.textContent = "";
   });
 
   async function fileToBase64(file) {
     if (!file) return null;
-    const maxBytes = 8 * 1024 * 1024; // 8MB guard
+    const maxBytes = 8 * 1024 * 1024; // 8MB
     if (file.size > maxBytes) throw new Error("Şəkil 8MB-dan böyükdür.");
     const buf = await file.arrayBuffer();
+    // Convert efficiently
     let binary = "";
     const bytes = new Uint8Array(buf);
     const chunk = 0x8000;
@@ -55,66 +103,90 @@
     return btoa(binary);
   }
 
-  function notify(msg, ok=false) {
-    toast.className = "toast " + (ok ? "ok" : "err");
-    toast.textContent = msg;
+  function validate(){
+    let ok = true;
+    [f.name, f.unit, f.qty, f.unitPrice].forEach(el=>{
+      if (!el.value || (el.type==="number" && num(el.value) < 0)){
+        el.classList.add("invalid"); ok = false;
+      } else {
+        el.classList.remove("invalid");
+      }
+    });
+    if (!totalLocked && num(f.total.value) < 0){
+      f.total.classList.add("invalid"); ok = false;
+    } else {
+      f.total.classList.remove("invalid");
+    }
+    return ok;
   }
 
-  form.addEventListener("submit", async (e) => {
+  f.form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    toast.className = "toast";
-    toast.textContent = "";
+    toast(""); setWarn("");
 
-    if (!name.value.trim() || !unit.value.trim()) {
-      notify("Zəhmət olmasa bütün tələb olunan sahələri doldurun.");
+    if (!GAS_ENDPOINT || GAS_ENDPOINT.includes("XXXXXXXX")) {
+      toast("Server URL (GAS_ENDPOINT) düzgün deyil. config.js faylını yeniləyin.", false);
+      return;
+    }
+    if (!validate()){
+      toast("Zəhmət olmasa tələb olunan sahələri düzgün doldurun.", false);
       return;
     }
 
     try {
-      submitBtn.disabled = true;
+      f.submitBtn.disabled = true;
 
       const payload = {
         secret: SHARED_SECRET,
-        name: name.value.trim(),
-        unit: unit.value.trim(),
-        qty: parseFloat(qty.value) || 0,
-        unitPrice: parseFloat(unitPrice.value) || 0,
-        total: parseFloat(total.value) || 0,
-        discountPct: parseFloat(discountPct.value) || 0,
-        discounted: parseFloat(discounted.value) || 0,
-        notes: notes.value.trim() || "",
-        receipt: null,           // base64 string
-        receiptName: null        // original filename
+        userEmail: USER_EMAIL || "",
+        project: "", // gələcək login/layihə dəstəyi üçün
+        name: f.name.value.trim(),
+        unit: f.unit.value.trim(),
+        qty: num(f.qty.value),
+        unitPrice: num(f.unitPrice.value),
+        total: num(f.total.value),
+        totalMode: totalLocked ? "auto" : "manual",
+        discountAZN: num(f.discountAZN.value),
+        payable: Math.max(0, num(f.total.value) - num(f.discountAZN.value)),
+        notes: f.notes.value.trim() || "",
+        receiptBase64: null,
+        receiptName: null,
+        clientVersion: CLIENT_VERSION
       };
 
-      if (receipt.files && receipt.files[0]) {
-        payload.receipt = await fileToBase64(receipt.files[0]);
-        payload.receiptName = receipt.files[0].name || "receipt.jpg";
+      if (f.receipt.files && f.receipt.files[0]){
+        payload.receiptBase64 = await fileToBase64(f.receipt.files[0]);
+        payload.receiptName = f.receipt.files[0].name || "receipt.jpg";
       }
 
       const res = await fetch(GAS_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       });
 
+      // Network/CORS errors throw before this, but status errors reach here:
       if (!res.ok) throw new Error("Server xətası: " + res.status);
-      const data = await res.json();
 
-      if (data?.ok) {
-        notify("Yadda saxlandı ✔", true);
-        form.reset();
+      const data = await res.json();
+      if (data?.ok){
+        toast("Yadda saxlandı ✔", true);
+        f.form.reset();
+        totalLocked = true;
+        f.lockBtn.setAttribute("aria-pressed","true");
+        f.lockBtn.textContent = "🔒";
         recalc();
       } else {
         throw new Error(data?.error || "Naməlum xəta");
       }
     } catch (err) {
-      notify(err.message || "Xəta baş verdi.");
+      // This is where “Failed to fetch” often shows (CORS/deploy issues)
+      toast(err.message || "Şəbəkə xətası. CORS və deployment ayarlarını yoxlayın.", false);
     } finally {
-      submitBtn.disabled = false;
+      f.submitBtn.disabled = false;
     }
   });
 
-  // initial
+  // initial calc
   recalc();
 })();
