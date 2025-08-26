@@ -1,7 +1,7 @@
 // config.js
 
 // Google Apps Script server ünvanı — buraya SİZİN doğru "exec" linkiniz gəlməlidir
-const GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbw0oQoTqmlUrvFaI91l8V8mdcYna6zF6wenvaHpwDwebMUUUSwXBz4ErCziJiYnsPWW/exec';
+const GAS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwxERBrh1BAMmOrxh3hkHenkkpoKkyX8a0E9Iaw68chnQ6kVaAJKrkYcVt1iOjB2eQApA/exec';
 
 // Təhlükəsizlik məqsədilə istifadə olunan sirr (Apps Script ilə uyğun olmalıdır)
 const SHARED_SECRET = 'myStrongSecret123';
