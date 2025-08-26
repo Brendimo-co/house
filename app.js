@@ -137,7 +137,6 @@
     e.preventDefault();
     toast(""); setWarn("");
 
-    // Endpoint yoxlaması
     if (!GAS_ENDPOINT || GAS_ENDPOINT.includes("XXXXXXXX")) {
       toast("Server URL (GAS_ENDPOINT) düzgün deyil. config.js faylını yeniləyin.", false);
       return;
@@ -174,9 +173,12 @@
         payload.receiptName = f.receipt.files[0].name || "receipt.jpg";
       }
 
+      // 🔥 CORS Bypass edilmiş fetch:
       const res = await fetch(GAS_ENDPOINT, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "text/plain;charset=utf-8" // <-- vacib dəyişiklik
+        },
         body: JSON.stringify(payload)
       });
 
@@ -200,6 +202,5 @@
     }
   });
 
-  // Səhifə açıldıqda ilkin hesablamanı apar
   recalc();
 })();
