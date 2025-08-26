@@ -1,74 +1,85 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="az">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Xərc Qeydiyyat</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Xərc İdarəetməsi — Material / Xidmət</title>
+  <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
-  <div class="container">
-    <h1>Xərc Qeydiyyat</h1>
-    <form id="costForm">
-      <label>
-        Ad:
-        <input type="text" name="name" required>
-        <span class="warning"></span>
-      </label>
-      <label>
-        Vahid:
-        <input type="text" name="unit" required>
-        <span class="warning"></span>
-      </label>
-      <label>
-        Miqdar:
-        <input type="number" name="qty" step="any" required>
-        <span class="warning"></span>
-      </label>
-      <label>
-        Vahid Qiymət:
-        <input type="number" name="unitPrice" step="any" required>
-        <span class="warning"></span>
-      </label>
-      <label>
-        Cəmi:
-        <div class="total-group">
-          <input type="number" name="total" step="any" readonly>
-          <button type="button" id="toggleTotal">🔒</button>
-        </div>
-        <span class="warning"></span>
-      </label>
-      <label>
-        Endirim (%):
-        <input type="number" name="discount" step="any" value="0">
-        <span class="warning"></span>
-      </label>
-      <label>
-        Ödəniləcək:
-        <input type="number" name="payable" step="any" readonly>
-        <span class="warning"></span>
-      </label>
-      <label>
-        Qəbz (8 MB‑a qədər):
-        <input type="file" name="receipt" accept="image/*">
-        <span class="warning"></span>
-      </label>
-      <label>
-        Qeyd:
-        <textarea name="notes"></textarea>
-      </label>
-      <label>
-        Versiya:
-        <input type="text" name="version" required>
-        <span class="warning"></span>
-      </label>
-      <button type="submit">Göndər</button>
+  <main class="container">
+    <header class="header">
+      <h1>Xərc İdarəetməsi</h1>
+      <p class="sub">Sadə, sürətli forma — məlumatlar Google Sheets-ə yazılır, çek şəkli Drive-a yüklənir.</p>
+    </header>
+
+    <form id="costForm" novalidate>
+      <div class="grid">
+        <label class="field">
+          <span>Material / Xidmət adı</span>
+          <input type="text" id="name" placeholder="məs: Beton M300 / Daşınma xidməti" required />
+        </label>
+
+        <label class="field">
+          <span>Ölçü vahidi</span>
+          <input type="text" id="unit" placeholder="m³, ədəd, saat..." required />
+        </label>
+
+        <label class="field">
+          <span>Miqdar</span>
+          <input type="number" id="qty" min="0" step="0.01" inputmode="decimal" placeholder="0.00" required />
+        </label>
+
+        <label class="field">
+          <span>Vahid qiymət (AZN)</span>
+          <input type="number" id="unitPrice" min="0" step="0.01" inputmode="decimal" placeholder="0.00" required />
+        </label>
+
+        <label class="field field-inline">
+          <span>Cəm qiymət (AZN)</span>
+          <div class="inline">
+            <input type="number" id="total" min="0" step="0.01" inputmode="decimal" placeholder="0.00" />
+            <button type="button" id="lockBtn" class="lock" aria-pressed="true" aria-label="Cəm qiymət kilidli">🔒</button>
+          </div>
+          <small class="hint">🔒 kilidli → avtomatik (Miqdar × Vahid qiymət). 🔓 açıq → manual düzəliş.</small>
+        </label>
+
+        <label class="field">
+          <span>Endirim (AZN)</span>
+          <input type="number" id="discountAZN" min="0" step="0.01" inputmode="decimal" placeholder="0.00" />
+        </label>
+
+        <label class="field">
+          <span>Ödəniləcək məbləğ (AZN)</span>
+          <input type="text" id="payable" readonly />
+        </label>
+
+        <label class="field">
+          <span>Çekin şəkli (JPG/PNG/WebP)</span>
+          <input type="file" id="receipt" accept="image/*" capture="environment" />
+        </label>
+
+        <label class="field">
+          <span>Qeydlər (opsional)</span>
+          <input type="text" id="notes" placeholder="məs: PO#123, satıcı, layihə adı" />
+        </label>
+      </div>
+
+      <div class="actions">
+        <button type="submit" id="submitBtn">Yadda saxla</button>
+        <button type="button" id="resetBtn" class="ghost">Təmizlə</button>
+      </div>
+
+      <div id="warn" class="warn" role="status" aria-live="polite"></div>
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
     </form>
-  </div>
 
-  <div id="toast" class="toast"></div>
+    <footer class="footer">
+      <small>© İxtiraçı — Cost Page • <span id="ver"></span></small>
+    </footer>
+  </main>
 
-  <script src="config.js"></script>
-  <script src="app.js"></script>
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
