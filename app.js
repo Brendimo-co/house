@@ -1,132 +1,192 @@
-// app.js
-async function resizeImage(file, maxWidth = 1600) {
-  return new Promise((res, rej) => {
-    const img = new Image();
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      img.src = e.target.result;
-    };
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const ratio = img.width > maxWidth ? maxWidth / img.width : 1;
-      canvas.width = img.width * ratio;
-      canvas.height = img.height * ratio;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob(blob => {
-        const fr = new FileReader();
-        fr.onload = () => res(fr.result);
-        fr.onerror = rej;
-        fr.readAsDataURL(blob);
-      }, file.type, 0.8);
-    };
-    reader.onerror = rej;
-    reader.readAsDataURL(file);
-  });
-}
+(function () {
+  // Shortcuts
+  const $ = (id) => document.getElementById(id);
+  const f = {
+    name: $("name"),
+    unit: $("unit"),
+    qty: $("qty"),
+    unitPrice: $("unitPrice"),
+    total: $("total"),
+    lockBtn: $("lockBtn"),
+    discountAZN: $("discountAZN"),
+    payable: $("payable"),
+    receipt: $("receipt"),
+    notes: $("notes"),
+    form: document.getElementById("costForm"),
+    submitBtn: $("submitBtn"),
+    resetBtn: $("resetBtn"),
+    toast: $("toast"),
+    warn: $("warn")
+  };
 
-document.addEventListener('DOMContentLoaded', () => {
-  const form = document.getElementById('costForm');
-  const toggleBtn = document.getElementById('toggleTotal');
-  const totalInput = form.elements['total'];
-  const qtyInput = form.elements['qty'];
-  const unitPriceInput = form.elements['unitPrice'];
-  const discountInput = form.elements['discount'];
-  const payableInput = form.elements['payable'];
+  let totalLocked = true; // 🔒 default
 
-  let manualTotal = false;
-  toggleBtn.addEventListener('click', () => {
-    manualTotal = !manualTotal;
-    totalInput.readOnly = !manualTotal;
-    toggleBtn.textContent = manualTotal ? '🔓' : '🔒';
-  });
+  function money(n){
+    if (isNaN(n) || n === null) return "";
+    return Number(n).toFixed(2);
+  }
+  function num(v){ return parseFloat(v) || 0; }
 
-  function updateTotals() {
-    const qty = parseFloat(qtyInput.value) || 0;
-    const unitPrice = parseFloat(unitPriceInput.value) || 0;
-    let total = manualTotal ? (parseFloat(totalInput.value) || 0) : qty * unitPrice;
-    totalInput.value = total.toFixed(2);
-    const discount = parseFloat(discountInput.value) || 0;
-    const payable = total - (total * discount / 100);
-    payableInput.value = payable.toFixed(2);
+  function setWarn(msg=""){ f.warn.textContent = msg || ""; }
+  function toast(msg, ok){
+    f.toast.className = "toast " + (ok===true ? "ok" : ok===false ? "err" : "");
+    f.toast.textContent = msg || "";
   }
 
-  [qtyInput, unitPriceInput, discountInput, totalInput].forEach(inp => {
-    inp.addEventListener('input', updateTotals);
-  });
-
-  async function showToast(msg) {
-    const toast = document.getElementById('toast');
-    toast.textContent = msg;
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 3000);
+  function calcTotalAuto(){
+    return num(f.qty.value) * num(f.unitPrice.value);
   }
 
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    // Clear previous warnings
-    form.querySelectorAll('.warning').forEach(w => w.textContent = '');
-    let valid = true;
-    Array.from(form.elements).forEach(el => {
-      if (el.required && !el.value) {
-        el.nextElementSibling.textContent = 'Bu sahə tələb olunur';
-        valid = false;
+  function recalc(){
+    // total
+    if (totalLocked){
+      const t = calcTotalAuto();
+      f.total.value = money(Math.max(0, t));
+    }
+    // payable
+    let tval = num(f.total.value);
+    let disc = num(f.discountAZN.value);
+    if (disc > tval){
+      disc = tval;
+      f.discountAZN.value = money(disc);
+      setWarn("Endirim cəmdən çox ola bilməz; avtomatik düzəldildi.");
+    } else {
+      setWarn("");
+    }
+    const pay = Math.max(0, tval - disc);
+    f.payable.value = money(pay);
+  }
+
+  // Events for live calc
+  ["qty","unitPrice","discountAZN","total"].forEach(id=>{
+    $(id).addEventListener("input", () => {
+      // When locked, ignore manual typing into total (we’ll immediately overwrite).
+      if (id === "total" && totalLocked) return;
+      recalc();
+    });
+  });
+
+  // Lock/unlock behavior
+  f.lockBtn.addEventListener("click", () => {
+    totalLocked = !totalLocked;
+    f.lockBtn.setAttribute("aria-pressed", (!totalLocked).toString());
+    f.lockBtn.textContent = totalLocked ? "🔒" : "🔓";
+    f.lockBtn.setAttribute("aria-label", totalLocked ? "Cəm qiymət kilidli" : "Cəm qiymət açıq");
+    if (totalLocked) {
+      // when re-locking, force recalc from qty*unitPrice
+      f.total.classList.remove("invalid");
+      recalc();
+    }
+  });
+
+  f.resetBtn.addEventListener("click", () => {
+    f.form.reset();
+    totalLocked = true;
+    f.lockBtn.setAttribute("aria-pressed", "true");
+    f.lockBtn.textContent = "🔒";
+    toast(""); setWarn("");
+    recalc();
+  });
+
+  async function fileToBase64(file) {
+    if (!file) return null;
+    const maxBytes = 8 * 1024 * 1024; // 8MB
+    if (file.size > maxBytes) throw new Error("Şəkil 8MB-dan böyükdür.");
+    const buf = await file.arrayBuffer();
+    // Convert efficiently
+    let binary = "";
+    const bytes = new Uint8Array(buf);
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  }
+
+  function validate(){
+    let ok = true;
+    [f.name, f.unit, f.qty, f.unitPrice].forEach(el=>{
+      if (!el.value || (el.type==="number" && num(el.value) < 0)){
+        el.classList.add("invalid"); ok = false;
+      } else {
+        el.classList.remove("invalid");
       }
     });
-    if (!valid) return;
+    if (!totalLocked && num(f.total.value) < 0){
+      f.total.classList.add("invalid"); ok = false;
+    } else {
+      f.total.classList.remove("invalid");
+    }
+    return ok;
+  }
 
-    const data = {
-      sharedSecret: CONFIG.sharedSecret,
-      name: form.elements['name'].value,
-      unit: form.elements['unit'].value,
-      qty: form.elements['qty'].value,
-      unitPrice: form.elements['unitPrice'].value,
-      total: form.elements['total'].value,
-      discount: form.elements['discount'].value,
-      payable: form.elements['payable'].value,
-      notes: form.elements['notes'].value,
-      version: form.elements['version'].value
-    };
+  f.form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    toast(""); setWarn("");
 
-    const file = form.elements['receipt'].files[0];
-    if (file) {
-      if (file.size > 8 * 1024 * 1024) {
-        form.elements['receipt'].nextElementSibling.textContent = 'Fayl çox böyük (8 MB‑dan çox)';
-        return;
-      }
-      try {
-        const dataUrl = await resizeImage(file, 1600);
-        const [base64Header, b64] = dataUrl.split(',');
-        data.receipt = {
-          filename: file.name,
-          mimeType: file.type,
-          base64: dataUrl
-        };
-      } catch (err) {
-        form.elements['receipt'].nextElementSibling.textContent = 'Şəkil işlənmədi';
-        return;
-      }
+    if (!GAS_ENDPOINT || GAS_ENDPOINT.includes("XXXXXXXX")) {
+      toast("Server URL (GAS_ENDPOINT) düzgün deyil. config.js faylını yeniləyin.", false);
+      return;
+    }
+    if (!validate()){
+      toast("Zəhmət olmasa tələb olunan sahələri düzgün doldurun.", false);
+      return;
     }
 
     try {
-      const resp = await fetch(CONFIG.endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+      f.submitBtn.disabled = true;
+
+      const payload = {
+        secret: SHARED_SECRET,
+        userEmail: USER_EMAIL || "",
+        project: "", // gələcək login/layihə dəstəyi üçün
+        name: f.name.value.trim(),
+        unit: f.unit.value.trim(),
+        qty: num(f.qty.value),
+        unitPrice: num(f.unitPrice.value),
+        total: num(f.total.value),
+        totalMode: totalLocked ? "auto" : "manual",
+        discountAZN: num(f.discountAZN.value),
+        payable: Math.max(0, num(f.total.value) - num(f.discountAZN.value)),
+        notes: f.notes.value.trim() || "",
+        receiptBase64: null,
+        receiptName: null,
+        clientVersion: CLIENT_VERSION
+      };
+
+      if (f.receipt.files && f.receipt.files[0]){
+        payload.receiptBase64 = await fileToBase64(f.receipt.files[0]);
+        payload.receiptName = f.receipt.files[0].name || "receipt.jpg";
+      }
+
+      const res = await fetch(GAS_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
       });
-      const result = await resp.json();
-      if (result.status === 'success') {
-        form.reset();
-        manualTotal = false;
-        totalInput.readOnly = true;
-        toggleBtn.textContent = '🔒';
-        updateTotals();
-        showToast('Uğurla göndərildi!');
+
+      // Network/CORS errors throw before this, but status errors reach here:
+      if (!res.ok) throw new Error("Server xətası: " + res.status);
+
+      const data = await res.json();
+      if (data?.ok){
+        toast("Yadda saxlandı ✔", true);
+        f.form.reset();
+        totalLocked = true;
+        f.lockBtn.setAttribute("aria-pressed","true");
+        f.lockBtn.textContent = "🔒";
+        recalc();
       } else {
-        showToast('Xəta: ' + result.message);
+        throw new Error(data?.error || "Naməlum xəta");
       }
     } catch (err) {
-      showToast('Şəbəkə xətası');
+      // This is where “Failed to fetch” often shows (CORS/deploy issues)
+      toast(err.message || "Şəbəkə xətası. CORS və deployment ayarlarını yoxlayın.", false);
+    } finally {
+      f.submitBtn.disabled = false;
     }
   });
-});
+
+  // initial calc
+  recalc();
+})();
