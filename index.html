@@ -1,1021 +1,1190 @@
 <!DOCTYPE html>
 <html lang="az">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Novxanı 1071 - Layihə İdarəetmə Sistemi (PM Dashboard)</title>
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <!-- React & ReactDOM -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    
-    <!-- Babel for in-browser JSX -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <style>
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        .animate-spin-slow { animation: spin 3s linear infinite; }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        .fade-in { animation: fadeIn 0.4s ease-in-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Novxanı 1071 — Tikinti ERP Paneli</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Sora:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { font-family: 'Sora', sans-serif; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  .scrollbar::-webkit-scrollbar { width:5px;height:5px }
+  .scrollbar::-webkit-scrollbar-track { background:transparent }
+  .scrollbar::-webkit-scrollbar-thumb { background:#94a3b8;border-radius:8px }
+  .scrollbar::-webkit-scrollbar-thumb:hover { background:#64748b }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+  .fadeup { animation:fadeUp .45s ease forwards }
+  @keyframes spin { 100%{transform:rotate(360deg)} }
+  .spinslow { animation:spin 3s linear infinite }
+  .grid-bg { background-image:linear-gradient(rgba(148,163,184,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.07) 1px,transparent 1px);background-size:40px 40px }
+</style>
 </head>
-<body class="bg-slate-50 font-sans text-slate-800 pb-20 selection:bg-indigo-100">
+<body class="bg-slate-950 text-slate-100 min-h-screen grid-bg selection:bg-indigo-500/30">
+<div id="root"></div>
 
-    <div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useMemo } = React;
 
-    <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
+const Icon = ({ name, size=20, className='' }) => {
+  const ref = useRef(null);
+  const kn = name.replace(/([a-z0-9])([A-Z])/g,'$1-$2').toLowerCase();
+  useEffect(() => { if(ref.current && window.lucide) window.lucide.createIcons({root:ref.current}); });
+  return <span ref={ref} className={`inline-flex items-center justify-center ${className}`}
+    dangerouslySetInnerHTML={{__html:`<i data-lucide="${kn}" width="${size}" height="${size}"></i>`}} />;
+};
 
-        // Təhlükəsiz Icon Komponenti
-        const Icon = ({ name, size = 24, className = '' }) => {
-            const spanRef = useRef(null);
-            const kebabName = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
-            const htmlStr = `<i data-lucide="${kebabName}" width="${size}" height="${size}"></i>`;
+const fmt = n => new Intl.NumberFormat('az-AZ',{style:'currency',currency:'AZN',minimumFractionDigits:2}).format(n);
 
-            useEffect(() => {
-                if (spanRef.current && window.lucide) {
-                    window.lucide.createIcons({ root: spanRef.current });
-                }
-            }); 
+// ─────────────────── PASSPORT DATA ───────────────────
+const PASSPORT = {
+  general: [
+    {label:'Layihə Adı', val:'Novxanı 1071 Bağ Evi', highlight:true},
+    {label:'Ünvan', val:'Novxanı Bağ Massivi, Sahibkar küç., Ev 1071'},
+    {label:'Mərtəbəlilik', val:'1 mərtəbə + Parapet (çardaqlıq yox)'},
+    {label:'Bina Forması', val:'Düzbucaqlı, iki trakt planlaşma'},
+    {label:'İnşaat İli', val:'2025-2026'},
+    {label:'Tikinti Növü', val:'Fərdi yaşayış evi (bağ evi)'},
+    {label:'Xalis Faydalı Sahə', val:'90.00 m²', highlight:true},
+    {label:'Tavan Hündürlüyü (Xalis)', val:'3.40 m (Kürsü + parapet çıxıldıqdan sonra)', highlight:true},
+    {label:'Bina Hündürlüyü (Tam)', val:'~5.20 m (Kürsü 0.70m + Divar 3.40m + Dam 1.10m)'},
+    {label:'Bina Eni x Uzunluğu', val:'Təxm. 9.50m × 10.00m (bünövrə ox xəttinə görə)'},
+  ],
+  foundation: [
+    {label:'Bünövrə Tipi', val:'Monolit davamlı lent (Lentovoy)', highlight:true},
+    {label:'Bünövrə Perimetri (Ox Xətti)', val:'67 pm (pogon metr)', highlight:true},
+    {label:'Bünövrə Xarici Perimetri', val:'~72 pm (Divar qalınlıqları daxil)'},
+    {label:'Bünövrə Ayaq İzi Sahəsi', val:'~90 m² (Binanın oturma sahəsi)'},
+    {label:'Bünövrə Lentinin Eni', val:'Xarici: 50 sm | Daxili: 30 sm'},
+    {label:'Bünövrə Dərinliyi', val:'80–100 sm (Donan xəttindən aşağı)'},
+    {label:'Bünövrə Hündürlüyü (Yer üstü = Kürsü)', val:'70 sm (Torpaqdan yuxarı)'},
+    {label:'M350 Beton Həcmi', val:'13.4 m³', highlight:true},
+    {label:'Hazırlıq Betonu (M150/Podbetonka)', val:'6.7 m³'},
+    {label:'Armatur Çəkisi (A400)', val:'820 kq (Ø12 + Ø8 çərçivə)'},
+    {label:'Şeben (Karbonat Döşəmə)', val:'6.7 m³'},
+    {label:'Kürsü Hörgüsü (Güzdək Daşı)', val:'93.8 m² (Xarici perimetr × 0.70m)'},
+    {label:'Kürsü Eni', val:'40 sm (xarici), 20 sm (daxili)'},
+    {label:'Su İzolyasiyası (Bitum/Tal)', val:'113.9 m² (Kürsü ətrafı + üstü)'},
+    {label:'Döşəmə Altı Dolğu', val:'9 m³ (Torpaq + Şeben qarışığı)'},
+    {label:'Döşəmə Altı Beton (B20)', val:'9 m³ (10 sm qalınlıqda)'},
+  ],
+  walls_ext: [
+    {label:'Xarici Divar Tipi', val:'Qoşa hörgü (2×20sm kubik)', highlight:true},
+    {label:'Ümumi Qalınlıq', val:'40 sm (2 cərgə + 5mm məhlul arası)'},
+    {label:'Xarici Divar Sahəsi (Brutto)', val:'156 m² (Pəncərə/Qapı kəsilmədən)'},
+    {label:'Xarici Divar Uzunluğu (Perimetr)', val:'~67 pm × 3.40m hündürlük = 227.8 m²'},
+    {label:'Mişar Daşı (Kubik) Sayı', val:'3,432 ədəd', highlight:true},
+    {label:'Kubik Daşı Ölçüsü', val:'20×20×40 sm (standart)'},
+    {label:'1 m² Üçün Daş Sayı', val:'~22 əd/m²'},
+    {label:'Sement (M400)', val:'85 kisə (42.5 kq/kisə)'},
+    {label:'Yuyulmuş Qum', val:'12 m³'},
+    {label:'Hörgü Məhlulunun Markası', val:'M100 (Sement:Qum = 1:3.5)'},
+    {label:'Lintel Sayı (Pəncərə/Qapı üzəri)', val:'14 ədəd prefabrik b/a lintel'},
+    {label:'Lintel Ölçüsü', val:'Standart 20×20 sm × (açıqlıq+0.5m)'},
+  ],
+  walls_int: [
+    {label:'Daxili Arakəsmə Tipi', val:'Tək hörgü (1×20sm kubik)', highlight:true},
+    {label:'Qalınlıq', val:'20 sm'},
+    {label:'Daxili Divar Sahəsi', val:'117 m²', highlight:true},
+    {label:'Mişar Daşı Sayı', val:'1,287 ədəd'},
+    {label:'1 m² Üçün Daş Sayı', val:'~11 əd/m²'},
+    {label:'Parapet Daşı Sayı', val:'800 ədəd (Çatı ətrafı, ~0.60m hündür)'},
+    {label:'Seysmik Kəmər Beton Həcmi', val:'22.68 m³ (M250/B20)', highlight:true},
+    {label:'Seysmik Kəmər Eni × Hündürlüyü', val:'40 sm × ~35 sm (tam divar üstü dövrə)'},
+    {label:'Seysmik Kəmər Armatur Çəkisi', val:'900 kq (Ø12 uzununa + Ø8 bağlayıcı)'},
+    {label:'Üst Beton Kəmər (Parapet)', val:'3 m³ M250'},
+    {label:'Otaqlar Arası Xərclər Göstəricisi', val:'İnteryer suvaqla 357 m² divar/tavan'},
+  ],
+  openings: [
+    {label:'Ümumi Pəncərə Sahəsi', val:'34 m²', highlight:true},
+    {label:'Pəncərə Profil Növü', val:'PVC 70mm, 3 kameralı (5 kameralı UPVC)'},
+    {label:'Şüşə Paketi', val:'2 qatlı (4mm şüşə — 16mm arqon — 4mm şüşə)'},
+    {label:'Rəng', val:'Antrasit (RAL 7016) xarici | Ağ daxili'},
+    {label:'Pəncərə Yerləşməsi', val:`Mətbəx: 2 əd (~3.6m²) | Zal: 2 əd (~5.0m²)
+Yataq 1: 2 əd (~3.6m²) | Yataq 2: 1 əd (~2.8m²)
+Yataq 3: 2 əd (~3.4m²) | Sanuzellər: 2 əd (~1.4m²)
+Dəhliz/Çamaşır: 2 əd (~1.2m²) | Fasad baxış: 1 əd (~13m²)`},
+    {label:'Pəncərə Sayı (Taxminən)', val:'~14 pəncərə bloku'},
+    {label:'Poliuretan Köpük Sərfiyyatı', val:'~12 balonlu köpük (750ml)'},
+    {label:'', val:'', divider:true},
+    {label:'Giriş (Çelik) Qapı', val:'1 ədəd | 0.90m × 2.10m | 3 nöqtəli kilit', highlight:true},
+    {label:'Daxili MDF Qapı', val:'6 ədəd | 0.80m × 2.00m (odalar, koridor)'},
+    {label:'Hamam/WC PVC Qapı', val:'1 ədəd | 0.70m × 2.00m'},
+    {label:'Cəmi Qapı Sayı', val:'8 ədəd (giriş daxil)'},
+    {label:'Lintel Sayı (Qapı+Pəncərə üzəri)', val:'14 əd prefabrik dəmir-beton'},
+  ],
+  roof: [
+    {label:'Dam Tipi', val:'Meyl dəyişkən çatı (maillik dəyişkən)', highlight:true},
+    {label:'Dam Örtüyü', val:'Profnastil MP-20, 0.45mm, Polyester boyalı'},
+    {label:'Dam Sahəsi (Kənarlar daxil)', val:'125 m²', highlight:true},
+    {label:'Dam Proyeksiya Sahəsi', val:'~105 m² (Bina damı)'},
+    {label:'Taxtabənd Materialı', val:'Qurudulmuş I sinif konstruksiya taxtası (50×150mm)'},
+    {label:'Taxta Həcmi', val:'4 m³'},
+    {label:'Taxtabənd Addımı (Merteklər arası)', val:'60 sm'},
+    {label:'XPS Penoplex İzolyasiya', val:'117 m² × 50mm qalınlıq'},
+    {label:'SBS Membran (Su keçirməz)', val:'137.5 m² (10% əlavə pay ilə)'},
+    {label:'Nov/Yağış Sistemi', val:'PVC yağış oluğu, 30 pm'},
+    {label:'Bağlayıcı Elementlər', val:'Anker boltlar, polad bərkidici elementlər'},
+  ],
+  mep: [
+    {label:'Elektrik Kabel Cəmi', val:'690 m (NYM-J 3×2.5 + 3×1.5)', highlight:true},
+    {label:'Elektrik Qrupların Sayı', val:'~12 müstəqil qrup (devre)'},
+    {label:'Rozetka + Açar Sayı', val:'40 ədəd'},
+    {label:'UZO', val:'1 ədəd 25A (həyati qoruyucu)'},
+    {label:'Avtomatlar', val:'12 ədəd 10–16A'},
+    {label:'Elektrik Şiti', val:'1 ədəd (24 modul)'},
+    {label:'', val:'', divider:true},
+    {label:'PPR Boru (İçəri Su)', val:'60 m (20mm + 25mm)', highlight:true},
+    {label:'PVC Kanalizasiya Borusu', val:'38 m (110mm + 50mm)'},
+    {label:'Septik Tank', val:'1 ədəd (2-kameralı, 3m³)'},
+    {label:'Santexnika Avadanlığı', val:'2×Unitaz | 2×Lavabo | 1×Duş kabinası | 2×Batareya'},
+    {label:'', val:'', divider:true},
+    {label:'İstilik Sistemi', val:'Qapalı dövrəli isti su (Kombi)', highlight:true},
+    {label:'Kombi Gücu', val:'28 kW (propan/şəhər qazı)'},
+    {label:'Radiator Dilim Sayı', val:'60 dilim alüminium radiator'},
+    {label:'Radiator Sayı (Otaqlara görə)', val:'9 otaq × ort. 6–8 dilim'},
+    {label:'Polipropilen Istilik Borusu', val:'~80 m (20mm PP-R)'},
+  ],
+  areas: [
+    {name:'Mətbəx', area:17.82, note:'L-şəkilli plan, adacıq imkanı'},
+    {name:'Zal / Qonaq Otağı', area:12.76, note:'Mətbəxlə açıq plan variantı'},
+    {name:'Yataq Otağı 1 (Master)', area:11.52, note:'Ensuite sanuzel bitişik'},
+    {name:'Yataq Otağı 2', area:9.60, note:'Uşaq otağı'},
+    {name:'Yataq Otağı 3', area:11.20, note:'Qonaq otağı'},
+    {name:'Sanuzel (Ümumi)', area:4.38, note:'Duş+Unitaz+Lavabo'},
+    {name:'Sanuzel (Master Ensuite)', area:3.04, note:'Unitaz+Lavabo'},
+    {name:'Çamaşırxana', area:2.24, note:'Maşın yeri nəzərdə tutulub'},
+    {name:'Dəhliz / Hol / Koridor', area:17.44, note:'Giriş hollu geniş dəhliz'},
+  ]
+};
 
-            return (
-                <span
-                    ref={spanRef}
-                    className={`inline-flex items-center justify-center ${className}`}
-                    dangerouslySetInnerHTML={{ __html: htmlStr }}
-                />
-            );
-        };
+// ─────────────────── MINIMUM PRICES RECALCULATED ───────────────────
+const CONSTRUCTION_DATA = {
+  foundation: {
+    id:'foundation', title:'Bünövrə və Kürsü', cost:6317.08,
+    icon:'Layers', color:'bg-slate-700', lightColor:'bg-slate-700/20',
+    description:'Qazıntı, hazırlıq qatı, armaturlu beton, kürsü hörgüsü, izolyasiya, döşəmə altı.',
+    subCosts:[
+      {name:'Qazıntı və Hazırlıq İşləri', desc:'Ekskavator (17m³×6₼=102₼) + Əl (67pm×2₼=134₼) + Viroplita (67pm×1.5₼=100.5₼)', amount:336.50},
+      {name:'Şeben + Podbetonka (M150)', desc:'Şeben 6.7m³×18₼=120.6₼ + M150 beton 6.7m³×68₼=455.6₼', amount:576.20},
+      {name:'Armatur Toxunması (Bünövrə)', desc:'Armatur A400 820kq×1.08₼=885.6₼ + Toxunma ustası 130₼', amount:1015.60},
+      {name:'Bünövrə Betonlanması (M350)', desc:'M350 beton 13.4m³×88₼=1179.2₼ + Qəlib/Usta 53.6m²×6₼=321.6₼', amount:1500.80},
+      {name:'Kürsü Hörgüsü (Güzdək Daşı)', desc:'Güzdək 93.8m²×8₼=750.4₼ + Məhlul 170₼ + Usta 93.8m²×4₼=375.2₼', amount:1295.60},
+      {name:'Kürsü Su İzolyasiyası', desc:'Bitum/tal 113.9m²×2.5₼=284.75₼ + Usta 113.9m²×1.7₼=193.63₼', amount:478.38},
+      {name:'Döşəmə Altı Hazırlıq', desc:'Dolğu 9m³×18₼=162₼ + B20 beton 9m³×78₼=702₼ + Usta 250₼', amount:1114.00},
+    ],
+    checks:{
+      project:['Evin ox diaqonalları bərabərdir? (Köşegen1 = Köşegen2 ±5mm)', 'Kürsü hündürlüyü küçə/həyət kotirovkasına görə hesablanıbmı?', 'Bünövrə izi torpaq parsel sənədinə uyğundurmu?'],
+      engineering:['6.7 m³ M150 podbetonka torpaqla birbaşa beton təmasını kəsibmi?', 'Beton tökülərkən vibrator istifadə olunubmu (boşluq yox)?', 'Armaturun paspayı plastik fiksatorla ≥35mm saxlanılıbmı?', 'Bünövrə 28 gün (minimum 7 gün) islaq saxlanılıbmı?'],
+      standards:['SNiP 3.02.01-87 torpaq qurğuları', 'GOST 34028-2016 armatur sertifikatı yoxlandımı?'],
+    },
+    sequence:[
+      {title:'Adım 1 — Geodezik Ox Vurma',desc:'Çertyojdakı bütün divar oxları (A, B, C... / 1, 2, 3...) nivelir aləti ilə torpağa köçürülür. Köşegenin bərabərliyi yoxlanılır.',
+       calcBasis:'Qazıqlar + ip: 40₼\nNivelir ustası: 150₼',materialsData:[{name:'Taxta qazıq+ip',qty:'Dəst',use:'40₼'},{name:'Nivelir xidməti',qty:'1 gün',use:'150₼'}],materialCost:40,laborCost:150},
+      {title:'Adım 2 — Ekskavator Qazıntısı',desc:'Ümumi 17 m³ torpaq çıxarılır, əl ilə təmizlənir. Dibinə viroplita ilə kipləşdirmə aparılır.',
+       calcBasis:'Ekskavator: 17m³×6₼=102₼\nƏl təmizləmə: 67pm×2₼=134₼\nViroplita: 67pm×1.5₼=100.5₼',materialsData:[{name:'Ekskavator icarəsi',qty:'17 m³',use:'102₼'}],materialCost:102,laborCost:234.50},
+      {title:'Adım 3 — Şeben + M150 Podbetonka',desc:'10 sm karbonat şeben döşənir, toqquşdurucu ilə zıxlanır. Üstünə 10 sm M150 hazırlıq betonu tökülür. Bu qat torpaqla birbaşa beton əlaqəsini kəsir.',
+       calcBasis:'Şeben: 6.7m³×18₼=120.6₼\nM150 beton: 6.7m³×68₼=455.6₼',materialsData:[{name:'Karbonat Şeben',qty:'6.7 m³',use:'120.6₼'},{name:'M150 Hazır Beton',qty:'6.7 m³',use:'455.6₼'}],materialCost:576.20,laborCost:150},
+      {title:'Adım 4 — Armatur Karkası + M350 Beton',desc:'Ø12 uzununa armaturlar + Ø8 bağlayıcılar toxunur. 50mm paspay saxlanılır. Taxta qəlib qoyulur, M350 beton tökülür, vibrator ilə işlənir.',
+       calcBasis:'Armatur: 820kq×1.08₼=885.6₼\nM350 beton: 13.4m³×88₼=1179.2₼\nQəlib+usta: 53.6m²×6₼=321.6₼',materialsData:[{name:'Armatur A400',qty:'820 kq',use:'885.6₼'},{name:'M350 Hazır Beton',qty:'13.4 m³',use:'1179.2₼'}],materialCost:2224.20,laborCost:350},
+      {title:'Adım 5 — Kürsü Hörgüsü + İzolyasiya',desc:'Beton bərkidikdən sonra güzdək daşı ilə kürsü hörülür (70sm hündür). Bitumla su izolyasiyası aparılır.',
+       calcBasis:'Güzdək: 93.8m²×8₼=750.4₼\nMəhlul: 170₼\nBitum: 113.9m²×2.5₼=284.75₼',materialsData:[{name:'Güzdək Daşı',qty:'93.8 m²',use:'750.4₼'},{name:'Bitum İzolyasiya',qty:'113.9 m²',use:'284.75₼'}],materialCost:1205.15,laborCost:568.85},
+      {title:'Adım 6 — Döşəmə Altı Beton',desc:'Kürsü içi dolğu ilə doldurulur, üstünə 10 sm B20 beton tökülür. Bu gələcək styaşkanın bazasıdır.',
+       calcBasis:'Dolğu: 9m³×18₼=162₼\nB20 beton: 9m³×78₼=702₼\nUsta: 250₼',materialsData:[{name:'Torpaq-Şeben Dolğu',qty:'9 m³',use:'162₼'},{name:'B20 Hazır Beton',qty:'9 m³',use:'702₼'}],materialCost:864,laborCost:250},
+    ],
+    warnings:'Bünövrə xətaları sonradan düzəldilə bilməz. M150 podbetonka olmadan birbaşa torpağa M350 tökmək kateqorik qadağandır. Armaturun paspayı olmadan beton 15-20 il sonra içdən paslanır.'
+  },
+  masonry: {
+    id:'masonry', title:'Hörgü və Kəmərlər', cost:9746.04,
+    icon:'Building', color:'bg-amber-700', lightColor:'bg-amber-700/20',
+    description:'Xarici + daxili divarlar, seysmik kəmər, lintel, parapet hörgüsü.',
+    subCosts:[
+      {name:'Xarici Divarlar (Qoşa, 156m²)', desc:'Daş 3432×0.55₼=1887.6₼ + Sement 85×7₼=595₼ + Qum 12×28₼=336₼ + Usta 3432×0.25₼=858₼', amount:3676.60},
+      {name:'Daxili Arakəsmələr (Tək, 117m²)', desc:'Daş 1287×0.55₼=707.85₼ + Sem/Qum ~330₼ + Usta 1287×0.25₼=321.75₼', amount:1359.60},
+      {name:'Pəncərə/Qapı Lintelləri', desc:'14 əd beton lintel ×12₼=168₼ + Montaj ustası 60₼', amount:228.00},
+      {name:'Seysmik Monolit Kəmər (B20)', desc:'Beton 22.68m³×88₼=1995.84₼ + Armatur 900kq×1.08₼=972₼ + Qəlib/Usta 350₼', amount:3317.84},
+      {name:'Parapet Hörgüsü', desc:'Daş 800×0.55₼=440₼ + Məhlul 130₼ + Usta 800×0.25₼=200₼', amount:770.00},
+      {name:'Üst Beton Kəmər (Parapet)', desc:'Beton 3m³×88₼=264₼ + Armatur/Usta 130₼', amount:394.00},
+    ],
+    checks:{
+      project:['Hər otağın xalis ölçüsü çertyozla uyğundurmu?', 'Tavanın xalis hündürlüyü 3.40m dəqiq hörülübmü?', 'Otaq küncləri 90° dərəcədirmi? (Köşegen nəzarəti)'],
+      engineering:['Hər 4-5 sıradan bir hörgü toru (Ø4 metal şəbəkə) atılıbmı?', 'Seysmik kəmər fasiləsiz (ömür boyu tökülüb) möhkəmlənibmi?', 'Divarlar şaquli vəziyyətdədir? (≤1mm/m tolerans)', 'Lintel min 25 sm hər tərəfə dayanırmı?'],
+      standards:['SNiP II-22-81 daşıyıcı divarlar normaları', 'Hər partiya daşın markası bərabərdir? (M75 min)'],
+    },
+    sequence:[
+      {title:'Adım 1 — Xarici Divarların Hörgüsü',desc:'Bünövrə üzərindən başlayaraq 156m² xarici (40sm qoşa) divar hörülür. Hər 5 sıradan bir armatur toru döşənir. Pəncərə/qapı açıqları üçün M100 lintel qoyulur.',
+       calcBasis:'Daş: 3432×0.55₼=1887.6₼\nSement: 85kisə×7₼=595₼\nQum: 12m³×28₼=336₼\nUsta: 3432×0.25₼=858₼',materialsData:[{name:'Mişar daşı (Kubik)',qty:'3432 əd',use:'1887.6₼'},{name:'Sement M400',qty:'85 kisə',use:'595₼'}],materialCost:2818.6,laborCost:858},
+      {title:'Adım 2 — Daxili Arakəsmə Divarlar',desc:'Otaqları ayıran 117m² tək (20sm) divarlar hörülür. Lintel mövqelərini çertyozla nəzarət edin.',
+       calcBasis:'Daş: 1287×0.55₼=707.85₼\nSem+Qum: ~330₼\nUsta: 1287×0.25₼=321.75₼',materialsData:[{name:'Mişar daşı (Kubik)',qty:'1287 əd',use:'707.85₼'}],materialCost:1037.85,laborCost:321.75},
+      {title:'Adım 3 — Seysmik Monolit Kəmər',desc:'Divarlar hündürlükdə bitdikdə ümumi bir beton kəmər dövranı tökülür. Bu zəlzələyə qarşı əsas konstruktiv element. 22.68m³ beton fasiləsiz tökülməlidir.',
+       calcBasis:'B20 beton: 22.68m³×88₼=1995.84₼\nArmatur: 900kq×1.08₼=972₼\nQəlib+usta: 350₼',materialsData:[{name:'B20 Hazır Beton',qty:'22.68 m³',use:'1995.84₼'},{name:'Armatur A400',qty:'900 kq',use:'972₼'}],materialCost:2967.84,laborCost:350},
+      {title:'Adım 4 — Parapet + Üst Kəmər',desc:'Damın kənarı üçün 800 daş parapet hörülür. Üstünə 3m³ finallaşdırıcı beton kəmər tökülür.',
+       calcBasis:'Parapet daşı: 800×0.55₼=440₼\nÜst beton: 3m³×88₼=264₼',materialsData:[{name:'Kubik daşı (Parapet)',qty:'800 əd',use:'440₼'}],materialCost:834,laborCost:330},
+    ],
+    warnings:'Divar hündürlüyü 3.4m olduğuna görə hər 20 sm sapla yoxlanmayana qədər hörgüyü dayandırın. Əyri divar suvaqda 2-3 sm fərq yaradar ki, bu da həm sərfiyyatı artırar, həm görünüşü pozar.'
+  },
+  interior: {
+    id:'interior', title:'Daxili Təmir', cost:11485.00,
+    icon:'PaintBucket', color:'bg-blue-700', lightColor:'bg-blue-700/20',
+    description:'Styaşka, mayaklı suvaq, alçipan tavan, şpaklovka, boya, kafel, laminat.',
+    subCosts:[
+      {name:'Döşəmə Styaşkası (180m²)', desc:'Material (180m²×4₼=720₼) + Usta (180m²×2.5₼=450₼)', amount:1170.00},
+      {name:'Mayaklı Suvaq + Alçipan Tavan', desc:'Material: gips 178kisə×6₼=1068₼ + Alçipan 90m² ~920₼. Usta: suvaq 357m²×5₼=1785₼ + tavan 90m²×8₼=720₼', amount:4493.00},
+      {name:'Şpaklovka + Boya', desc:'Material: 402m²×3.5₼=1407₼ + Usta: 402m²×4₼=1608₼', amount:3015.00},
+      {name:'Keramaqranit Kafel (85m²)', desc:'Kafel: 85m²×12₼=1020₼ + Usta/Yapışdırıcı: 85m²×10₼=850₼', amount:1870.00},
+      {name:'Laminat + Plintus (65m²)', desc:'Laminat: 65m²×11₼=715₼ + Plintus 240₼ + Usta 220₼', amount:1175.00},
+    ],
+    checks:{
+      project:['Styaşka tamam quruyana qədər (min 28 gün) laminat vurulmayıb?', 'Nəmliyin ölçülməsi (<75%RH) aparılıbmı?'],
+      engineering:['Alçipan birləşmə yerlərindən fiberglass lent vurulubmu?', 'Kafel vurulmadan su izolyasiyası testdən keçirildimi?', 'Mayaklı suvaqda lazer nəzarəti (±2mm/2m) aparılıbmı?'],
+    },
+    sequence:[
+      {title:'Adım 1 — Styaşka (Döşəmə Betonu)',desc:'Döşəmə altı beton üzərindən 5-7 sm M150 verilən styaşka tökülür. Lazer niveliri ilə səthin düzlüyü 2 mm/m normunda saxlanılır.',
+       calcBasis:'Sement+Qum+Su: 180m²×4₼=720₼\nUsta: 180m²×2.5₼=450₼',materialsData:[{name:'Gips/Sement Styaşka Qarışığı',qty:'180 m²',use:'720₼'}],materialCost:720,laborCost:450},
+      {title:'Adım 2 — Metal Mayak + Suvaq',desc:'Lazer ilə metalik mayaklar dikinə qoyulur (30-40sm aralı). Suvaq maşını və ya əl ilə 1.5-2 sm qat vurulur. Styropor qayışla hamarlanır. 357 m² divar suvanır.',
+       calcBasis:'Gips (178kisə×6₼)=1068₼\nAlçipan (90m²): 920₼\nSuvaq ustası: 357m²×5₼=1785₼\nTavan ustası: 90m²×8₼=720₼',materialsData:[{name:'Knauf Rotband Gips',qty:'178 kisə',use:'1068₼'},{name:'Alçipan 12.5mm',qty:'90 m²',use:'920₼'}],materialCost:1988,laborCost:2505},
+      {title:'Adım 3 — Şpaklovka + Boya',desc:'Qurumuş suvaq üzərinə astar çəkilir. 2 qat üz şpaklovka vurulur, P120→P180 zımparalanır. Son olaraq 2 qat emulsion boya.',
+       calcBasis:'Şpaklovka+boya material: 402m²×3.5₼=1407₼\nMalyar ustası: 402m²×4₼=1608₼',materialsData:[{name:'Üz Şpaklovka + Boya',qty:'402 m²',use:'1407₼'}],materialCost:1407,laborCost:1608},
+      {title:'Adım 4 — Kafel + Laminat',desc:'Mətbəx, hol, sanuzellərə 85m² keramaqranit vurulur. Yataq + zal otaqlarına 65m² laminat döşənir.',
+       calcBasis:'Kafel: 85m²×12₼=1020₼\nLaminat: 65m²×11₼=715₼\nUsta daxil: ~1070₼',materialsData:[{name:'Keramaqranit 60×60',qty:'85 m²',use:'1020₼'},{name:'Laminat 8mm AC4',qty:'65 m²',use:'715₼'}],materialCost:1735,laborCost:1070},
+    ],
+    warnings:'Rütubət ölçmədən styaşka üzərinə laminat vurmaq 6 ayda söküləcək. Kafel altı su izolyasiyasız sanuzel isidilərərsə nəmlik divara sızacaq.'
+  },
+  roof: {
+    id:'roof', title:'Dam və Pilləkən', cost:4971.60,
+    icon:'Home', color:'bg-red-700', lightColor:'bg-red-700/20',
+    description:'Taxta karkas (taxtabənd), XPS izolyasiya, SBS membran, profnastil örtük, nov.',
+    subCosts:[
+      {name:'Dam Taxta Karkası', desc:'Taxta: 4m³×300₼=1200₼ + Dam ustası: 125m²×5₼=625₼', amount:1825.00},
+      {name:'XPS + SBS İzolyasiya', desc:'SBS: 137.5m²×5₼=687.5₼ + Penoplex: 117m²×4.8₼=561.6₼ + Usta 340₼', amount:1589.10},
+      {name:'Profnastil Örtük', desc:'Profnastil: 125m²×7.2₼=900₼ + Usta: 125m²×2.5₼=312.5₼', amount:1212.50},
+      {name:'Nov/Yağış Sistemi', desc:'PVC nov: 30pm×6₼=180₼ + Usta 85₼', amount:265.00},
+    ],
+    checks:{
+      project:['Damın maillik dərəcəsi layihəyə uyğundurmu? (min 15-20°)'],
+      engineering:['Mauerlat ankerlərinin addımı ≤120 sm saxlanılıbmı?', 'Taxtabənd antibakteria + antifungal məhlulla işlənibmi?', 'XPS izolyasiya plitlərinin tikişləri söküb yenidən bitişdirilməyibmi?', 'Ventilyasiya boşluğu (3-5sm) saxlanılıbmı?'],
+    },
+    sequence:[
+      {title:'Adım 1 — Mauerlat Ankerlənməsi',desc:'Divarın üstündəki beton kəmərə Ø12mm anker boltlar 100sm addımla basdırılır. 150×200mm mauerlat taxta ankerə bağlanır. Bu örtüyün divarla əlaqəsidir.',
+       calcBasis:'Taxta: 4m³×300₼=1200₼\nUsta: 125m²×5₼=625₼',materialsData:[{name:'Qurudulmuş Konstruksiya taxtası',qty:'4 m³',use:'1200₼'}],materialCost:1200,laborCost:625},
+      {title:'Adım 2 — XPS + SBS İzolyasiya',desc:'50mm XPS Penoplex plitlər taxta arasına qoyulur. Üstünə qaynaq edilən SBS su keçirməz membran çəkilir. Birləşmə yerlərini 15 sm örtmək mütləq.',
+       calcBasis:'SBS: 137.5m²×5₼=687.5₼\nPenoplex: 117m²×4.8₼=561.6₼\nUsta: 340₼',materialsData:[{name:'XPS Penoplex 50mm',qty:'117 m²',use:'561.6₼'},{name:'SBS Membran',qty:'137.5 m²',use:'687.5₼'}],materialCost:1249.10,laborCost:340},
+      {title:'Adım 3 — Profnastil + Nov',desc:'Profnastil saclar aşağıdan yuxarı örtülür (su axışı istiqamətinə zidd). Nov sistemi damın ətrafına bərkidilir.',
+       calcBasis:'Profnastil: 125m²×7.2₼=900₼\nNov: 30pm×6₼=180₼\nUsta: 312.5₼+85₼=397.5₼',materialsData:[{name:'Profnastil MP-20 0.45mm',qty:'125 m²',use:'900₼'},{name:'PVC Nov sistemi',qty:'30 pm',use:'180₼'}],materialCost:1080,laborCost:397.50},
+    ],
+    warnings:'Dam ventilyasiyası 3-5sm saxlanmasa yay istisindən nəmlik yığılar, qış şaxtasında buz bağlayar. Taxta antibakteria işlənmədən quraşdırılsa 5 ildə çürüyür.'
+  },
+  plumbing: {
+    id:'plumbing', title:'Sanitar-Texniki Sistemlər', cost:3416.60,
+    icon:'Droplet', color:'bg-cyan-700', lightColor:'bg-cyan-700/20',
+    description:'PVC kanalizasiya, PPR su xətləri, septik tank, hamam izolyasiyası və avadanlıqlar.',
+    subCosts:[
+      {name:'Daxili PVC Kanalizasiya', desc:'PVC boru 38m×3.2₼=121.6₼ + Usta/fitinqlər 130₼', amount:251.60},
+      {name:'PPR Su Xətləri (Soyuq+İsti)', desc:'PPR boru 60m×2.5₼=150₼ + Usta/Test 175₼', amount:325.00},
+      {name:'Xarici Kanalizasiya + Septik', desc:'Septik tank 2kameralı 520₼ + Qazıntı/Quraşdırma 130₼', amount:650.00},
+      {name:'Sanuzel İzolyasiya + Kafel', desc:'Kafel 50m²×12₼=600₼ + Usta/Hidro-izol 50m²×12₼=600₼', amount:1200.00},
+      {name:'Santexnika Avadanlıqları', desc:'Unitaz×2(240₼) + Lavabo×2(170₼) + Duş(280₼) + Batareya×2(130₼) = 820₼ + Usta 170₼', amount:990.00},
+    ],
+    checks:{
+      project:['S-trap (qoxu qapağı) hər aparata quraşdırılıbmı?', 'Kanalizasiya boru meyli ≥2 sm/m saxlanılıbmı?'],
+      engineering:['PPR boru sistemi 24 saatlıq 6 bar presləmə testindən keçirildi?', 'Sanuzel döşəməsi 48 saatlıq sızma testindən keçdi?'],
+    },
+    sequence:[
+      {title:'Adım 1 — PVC Kanalizasiya Xətləri',desc:'Styaşkadan əvvəl bütün 110mm ve 50mm PVC kanalizasiya borular divar + döşəmə altından çəkilir. Yer dəyişikliyi bundan sonra mümkün olmayacaq.',
+       calcBasis:'PVC 110mm (ağır): 20m×4₼=80₼\nPVC 50mm (yüngül): 18m×2₼=36₼\nUsta + fitinq: 130₼',materialsData:[{name:'PVC Boru 110mm',qty:'20 m',use:'80₼'},{name:'PVC Boru 50mm',qty:'18 m',use:'36₼'}],materialCost:116,laborCost:130},
+      {title:'Adım 2 — PPR Su Xətləri + Test',desc:'PPR borular soyuq (mavi) / isti (qırmızı) ayrı çəkilir. Bütün birləşmələr elektrik kaynatma ilə bağlanır. 6 bar ilə 24 saatlıq test aparılır.',
+       calcBasis:'PPR 20mm: 40m×2.5₼=100₼\nPPR 25mm: 20m×3.2₼=64₼\nUsta+test: 175₼',materialsData:[{name:'PPR Boru 20/25mm',qty:'60 m',use:'164₼'}],materialCost:164,laborCost:175},
+      {title:'Adım 3 — Sanuzel İzolyasiya + Avadanlıq',desc:'Sanuzellərə Penetron/Lithoflex əsaslı hidro-izolyasiya çəkilir, 48 saat suya basılır. Sonra kafel vurulur, avadanlıqlar quraşdırılır.',
+       calcBasis:'İzolyasiya + kafel material: 1200₼\nAvadanlıq dəsti: 820₼\nUsta: 770₼',materialsData:[{name:'Kafel + İzolyasiya',qty:'50 m²',use:'1200₼'},{name:'Santexnika dəsti',qty:'Kompleks',use:'820₼'}],materialCost:2020,laborCost:770},
+    ],
+    warnings:'Boruları test etmədən döşəmə betonu dökmək fəlakətdir. Su sızması divardan keçib 6 ayda bünövrəyə çatar. Kanalizasiya meyli az olarsa boru özü tıxanacaq.'
+  },
+  electro_heating: {
+    id:'electro_heating', title:'Elektrik və İstilik', cost:3586.50,
+    icon:'Zap', color:'bg-orange-600', lightColor:'bg-orange-600/20',
+    description:'NYM kabelləri, elektrik şiti, UZO, Kombi + alüminium radiator sistemi.',
+    subCosts:[
+      {name:'Ştroblar + Kabelləşmə', desc:'NYM-J 3×2.5: 400m×1₼=400₼ | NYM-J 3×1.5: 290m×0.7₼=203₼ + Usta: 690m×0.85₼=586.5₼', amount:1189.50},
+      {name:'Kombi + Radiatorlar', desc:'Kombi 28kW: 780₼ + Rad. 60dilim×10₼=600₼ + PP-R istilik borusu: 130₼ + Usta 180₼', amount:1690.00},
+      {name:'Elektrik Şiti + UZO', desc:'Şit 45₼ + UZO 75₼ + 12 avtomat×6₼=72₼ + Usta 85₼', amount:277.00},
+      {name:'Rozetka + Açarlar', desc:'40əd×4.5₼=180₼ + Usta 40×2.5₼=100₼', amount:280.00},
+      {name:'Qofra + Montaj Materialları', desc:'Qofra 16mm: 700m×0.30₼=210₼ + Montaj: müxtəlif 150₼', amount:360.00},
+    ],
+    checks:{
+      project:['Rozetka hündürlüyü standartdırmı? (Yer: 30sm | Divar: 90sm)', 'Mebel planına görə rozetka yerlərini yenidən yoxladınızmı?'],
+      engineering:['UZO (30mA) şitdə quraşdırılıbmı — bu HƏYATİ VACIBDIR!', 'Qrup kabelləri ayrı-ayrı dövrə kimi şitə bağlanıbmı?', 'Kombi qazı fleks metalik boru ilə bağlanıbmı?'],
+    },
+    sequence:[
+      {title:'Adım 1 — Ştrobların Açılması + Kabelləşmə',desc:'Suvaqdan əvvəl divarlar üzrə elektrik yolları (ştroblar) açılır. NYM kabellər gofra içindən keçirilir, şitə qədər aparılır.',
+       calcBasis:'NYM 3×2.5: 400m×1₼=400₼\nNYM 3×1.5: 290m×0.7₼=203₼\nQofra: 700m×0.3₼=210₼\nUsta: 690m×0.85₼=586.5₼',materialsData:[{name:'NYM-J 3×2.5 Kabel',qty:'400 m',use:'400₼'},{name:'NYM-J 3×1.5 Kabel',qty:'290 m',use:'203₼'}],materialCost:813,laborCost:586.50},
+      {title:'Adım 2 — Elektrik Şiti + UZO',desc:'Şit yığılır, UZO qoşulur, qrup avtomatlar bağlanır. Hər qrupun adı yazılır. Test: 30mA sızma yoxlanması.',
+       calcBasis:'Şit: 45₼\nUZO: 75₼\nAvtomatlar (12×6₼): 72₼\nUsta: 85₼',materialsData:[{name:'UZO 25A/30mA',qty:'1 əd',use:'75₼'},{name:'Avtomat 16A/10A',qty:'12 əd',use:'72₼'}],materialCost:192,laborCost:85},
+      {title:'Adım 3 — Kombi + Radiator Sistemi',desc:'Kombi bağlanır, PP-R borular döşənir, radiatorlar pəncərə altına asılır. Sistem suyunun pH test edilir. Hava boşaltma edilir.',
+       calcBasis:'Kombi 28kW: 780₼\nRadiator 60dilim×10₼=600₼\nBorulamaq: 130₼\nUsta: 180₼',materialsData:[{name:'Kombi 28kW (qaz)',qty:'1 əd',use:'780₼'},{name:'Alüminium Radiator',qty:'60 dilim',use:'600₼'}],materialCost:1510,laborCost:180},
+    ],
+    warnings:'UZO OLMADAN EV KABUL EDİLMƏZ. Elektrik çarpması faciəvi nəticə verir. Kombi gaz qoşulmasını mütləq lisenziyalı qaz ustası etməlidir.'
+  },
+  exterior: {
+    id:'exterior', title:'Fasad və Həyət', cost:4751.00,
+    icon:'Map', color:'bg-emerald-600', lightColor:'bg-emerald-600/20',
+    description:'Fiberglass torlu fasad suvağı, silikon boya, həyət tameti, qazon.',
+    subCosts:[
+      {name:'Fasad Tor + Suvaq (214m²)', desc:'Fiberglass tor 214m²×1.8₼=385.2₼ + Astar/Dekor suvaq 214m²×3.5₼=749₼ + Usta 214m²×6.5₼=1391₼', amount:2525.20},
+      {name:'Həyət Tameti + Beton (80m²)', desc:'R11 küçə kafeli 80m²×10₼=800₼ + B20 hazırlıq betonu 300₼ + Usta 650₼', amount:1750.00},
+      {name:'Bağça + İşıqlandırma', desc:'Qazon toxumu 100m²×3₼=300₼ + Xarici işıqlar 120₼ + Usta 170₼ = 590₼', amount:475.80},
+    ],
+    checks:{
+      project:['Həyətin mailliyi min 1.5-2% evin tərəfinə doğru deyil, ondan uzağadır?'],
+      engineering:['Fasad toru qoyulmadan suvaq vurulmayıb ki?', 'Fasad boyası +5°C-dən aşağı vurulmayıb?'],
+    },
+    sequence:[
+      {title:'Adım 1 — Fasad Toru + Astar',desc:'Divara ilk astar çəkilir. Üstünə fiberglass tor basılır. Çatlamaması üçün bu mərhələ atlanmamalıdır.',
+       calcBasis:'Fiberglass tor: 214m²×1.8₼=385.2₼\nAstar: 214m²×1₼=214₼\nUsta: 600₼',materialsData:[{name:'Fiberglass Fasad Toru',qty:'214 m²',use:'385.2₼'}],materialCost:599.2,laborCost:600},
+      {title:'Adım 2 — Dekorativ Suvaq + Silikon Boya',desc:'Tor üzərinə qum feli dekorativ suvaq (2mm) vurulur. Quruduqdan sonra silikon əsaslı fasad boyası 2 qat çəkilir.',
+       calcBasis:'Dekor suvaq: 214m²×2.5₼=535₼\nSilikon boya: 214m²×3₼=642₼\nUsta: 791₼',materialsData:[{name:'Dekor Suvaq+Silikon Boya',qty:'214 m²',use:'1177₼'}],materialCost:1177,laborCost:791},
+      {title:'Adım 3 — Həyət Tameti + Qazon',desc:'B20 hazırlıq betonu döşənir, R11 (slip-resistant) küçə kafeli vurulur. Qazon əkilir, işıqlar bağlanır.',
+       calcBasis:'Tamet 80m²×10₼=800₼\nBeton base: 300₼\nQazon+işıq: 420₼\nUsta: 820₼',materialsData:[{name:'R11 Küçə Kafeli',qty:'80 m²',use:'800₼'}],materialCost:1520,laborCost:820},
+    ],
+    warnings:'Fasad boyasını yağışdan əvvəl vurmaq boyayı bütünlüklə məhv edər. Həyətin mailliyi ev tərəfinə doğru olarsa yağış suyu bünövrəyə axar.'
+  },
+  doors_windows: {
+    id:'doors_windows', title:'Qapı və Pəncərələr', cost:3878.00,
+    icon:'DoorClosed', color:'bg-sky-700', lightColor:'bg-sky-700/20',
+    description:'PVC 70mm üçkameralı pəncərələr, çelik giriş qapısı, MDF + PVC daxili qapılar.',
+    subCosts:[
+      {name:'PVC Pəncərələr (34m²)', desc:'PVC 70mm 3kameralı: 34m²×62₼=2108₼ + Montaj köpük 130₼', amount:2238.00},
+      {name:'Çelik Giriş Qapısı', desc:'3 nöqtəli kilid çelik qapı: 380₼ + Montaj: 45₼', amount:425.00},
+      {name:'Daxili MDF + PVC Qapılar', desc:'MDF: 6×155₼=930₼ + PVC hamam: 100₼ + Usta: 185₼', amount:1215.00},
+    ],
+    checks:{
+      project:['Köpük tamamilə soyuduqdan sonra artıq hissə kəsilib suvağa hazırlanıbmı?'],
+      engineering:['Pəncərə şlakları üfüqidir? Lazer yoxlanması aparılıbmı?', 'Su sızdırmazlıq silikon sızdırmazlığı vurulubmu?'],
+    },
+    sequence:[
+      {title:'Adım 1 — Pəncərə Ölçüsü + Sifariş',desc:'Divarlar hörgüdən sonra aktual ölçülər götürülür (ölçmədən sifariş verilmir!). PVC 70mm 3-kameralı, antrasit kənar, beyaz daxili sifariş verilir. 2-4 həftə çatdırılma müddəti.',
+       calcBasis:'PVC 70mm: 34m²×62₼=2108₼\nKöpük (12balonlu): 130₼',materialsData:[{name:'PVC 70mm Pəncərə (Antrasit)',qty:'34 m²',use:'2108₼'},{name:'Poliuretan köpük',qty:'12 balon',use:'130₼'}],materialCost:2238,laborCost:200},
+      {title:'Adım 2 — Çelik Qapı Montajı',desc:'Giriş qapısı divar açığına ankerlə bərkidilir. Köpüklənir. Suvaqdan əvvəl edilir ki, yan boşluqlar örtülsün.',
+       calcBasis:'Çelik qapı: 380₼\nMontaj: 45₼',materialsData:[{name:'Çelik Giriş Qapısı',qty:'1 əd',use:'380₼'}],materialCost:380,laborCost:45},
+      {title:'Adım 3 — Daxili Qapılar',desc:'Daxili MDF qapılar ən sonuncu olaraq (boya bitdikdən sonra) asılır. Bu şəkildə rütubət şişməsinin qarşısı alınır.',
+       calcBasis:'MDF qapı: 6×155₼=930₼\nPVC hamam: 100₼\nUsta: 185₼',materialsData:[{name:'MDF Qapı Dəsti',qty:'6 əd',use:'930₼'},{name:'PVC Hamam Qapısı',qty:'1 əd',use:'100₼'}],materialCost:1030,laborCost:185},
+    ],
+    warnings:'Pəncərə sifarişini divar bitdikdən ən azı 2-4 həftə əvvəl vermək lazımdır. Daxili qapıları rütubət vaxtı asmayın — şişib sıxılar.'
+  },
+  pool: {
+    id:'pool', title:'Hovuz İnşası (6×3m)', cost:8035.00,
+    icon:'Waves', color:'bg-teal-600', lightColor:'bg-teal-600/20',
+    description:'Qazıntı, monolit beton, epoksi izolyasiya, şüşə mozaika, nasos+filtr sistemi.',
+    subCosts:[
+      {name:'Qazıntı + Kipləşdirmə', desc:'43m³×7₼=301₼ + Kipləşdirmə 170₼', amount:471.00},
+      {name:'Armatur + B25 Beton', desc:'Beton: 12m³×88₼=1056₼ + Armatur: 850kq×1.08₼=918₼ + Usta 520₼', amount:2494.00},
+      {name:'Epoksi İzolyasiya + Mozaika', desc:'Şüşə mozaika 60m²×22₼=1320₼ + Epoksi izol 1050₼ + Usta 1050₼', amount:3420.00},
+      {name:'Texniki Sistem (Nasos+Filtr)', desc:'Qum filtri + Nasos dəsti: 1300₼ + Montaj: 350₼', amount:1650.00},
+    ],
+    checks:{
+      engineering:['Beton fasiləsiz monolit töküldümü? (Soyuq birləşmə yox!)', '72 saatlıq sızma testindən keçdimi? (Səviyyənin düşməsi yox)'],
+    },
+    sequence:[
+      {title:'Adım 1 — Qazıntı + Monolit Beton',desc:'43m³ torpaq çıxarılır. Armatur karkası toxunur. B25+Penetron (su keçirməz əlavə) beton fasiləsiz tökülür.',
+       calcBasis:'Beton: 12m³×88₼=1056₼\nArmatur: 850×1.08₼=918₼\nUsta: 520₼',materialsData:[{name:'B25 Beton+Penetron',qty:'12 m³',use:'1056₼'},{name:'Armatur A400',qty:'850 kq',use:'918₼'}],materialCost:1974,laborCost:520},
+      {title:'Adım 2 — 72 Saat Su Testi',desc:'Hovuz suyla doldurulur, 72 saatda su səviyyəsi düşmürsə keçir. Sızma olarsa Penetron məhlulu ilə bağlanır.',
+       calcBasis:'Sızma testi: əmək xərci = 50₼ (texnik)',materialsData:[],materialCost:0,laborCost:50},
+      {title:'Adım 3 — Epoksi İzolyasiya + Mozaika',desc:'Xüsusi hovuz epoksi izolyasiyası vurulur. Üstünə epoksi yapışdırıcı ilə şüşə mozaika vurulur. Doldurulub hazır.',
+       calcBasis:'Mozaika: 60m²×22₼=1320₼\nEpoksi izol: 1050₼\nUsta: 1050₼\nNasos+Filtr: 1300₼',materialsData:[{name:'Şüşə Mozaika',qty:'60 m²',use:'1320₼'},{name:'Nasos+Qum Filtri',qty:'Dəst',use:'1300₼'}],materialCost:3670,laborCost:1050},
+    ],
+    warnings:'Hovuzda adi sement yapışdırıcı qadağandır — su altında şişib mozaikanı qoparacaq. Betonun fasiləsiz tökülməsi şərt: fasilə = sızma riski.'
+  },
+  furniture: {
+    id:'furniture', title:'Mebel və Texnika', cost:5400.00,
+    icon:'Package', color:'bg-purple-600', lightColor:'bg-purple-600/20',
+    description:'Mətbəx mebeli + texnikalar, 3 yataq otağı, zal/qonaq otağı mebelləri.',
+    subCosts:[
+      {name:'Mətbəx Mebeli + Texnika', desc:'MDF mətbəx: 3.5m×360₼=1260₼ + Ocaq+qaput+soyuducu: 950₼ + Usta 130₼', amount:2340.00},
+      {name:'Yataq Otaqları (3 otaq)', desc:'Gardırop: 3×280₼=840₼ + Çarpayı dəsti: 3×380₼=1140₼', amount:1980.00},
+      {name:'Zal / Qonaq Otağı', desc:'Divan: 780₼ + TV ünit: 170₼ + Qəhvə masası: 130₼', amount:1080.00},
+    ],
+    checks:{
+      project:['Ağır şkaflar divarın daşıyıcı hissəsinə L-dəmirlə bağlanıbmı? (Anti-tip)'],
+    },
+    sequence:[
+      {title:'Adım 1 — Mətbəx',desc:'MDF alt+üst şkaflar quraşdırılır, tezgah kəsilir. Ocaq, qaput, soyuducu yerləşdirilir.',
+       calcBasis:'Mətbəx: 3.5pm×360₼=1260₼\nTexnikalar: 950₼\nUsta: 130₼',materialsData:[{name:'MDF Mətbəx Dəsti',qty:'3.5 pm',use:'1260₼'},{name:'Mətbəx Texnikaları',qty:'Dəst',use:'950₼'}],materialCost:2210,laborCost:130},
+      {title:'Adım 2 — Yataq + Zal Mebeli',desc:'Gardıroplar ankerlə divara bağlanır. Çarpayılar, divanlar, TV ünit yerləşdirilir.',
+       calcBasis:'Gardırop: 3×280₼=840₼\nÇarpayı: 3×380₼=1140₼\nZal: 1080₼\nUsta: 150₼',materialsData:[{name:'Gardırop+Çarpayı',qty:'3 dəst',use:'1980₼'},{name:'Zal mebeli',qty:'Dəst',use:'1080₼'}],materialCost:3060,laborCost:150},
+    ],
+    warnings:'Ağır gardıroplar alçipan bərkitmə lokuna deyil, daşıyıcı divara ankerlənməlidir. Uşaq otaqları üçün bu həyati vacibdir.'
+  },
+};
 
-        // BAZAR ARAŞDIRMASI: MİNİMUM ZAVOD/SEX QİYMƏTLƏRİ (YENİLƏNİB)
-        const CONSTRUCTION_DATA = {
-          foundation: {
-            id: 'foundation', title: 'Bünövrə və Kürsü İşləri', cost: 5800.70,
-            icon: 'Hammer', color: 'bg-slate-700', hoverColor: 'hover:fill-slate-600',
-            description: 'Torpaq qazıntısı, 67pm lentvari təməl, M150 hazırlıq, M350 monolit betonlama və B20 döşəmə altı.',
-            subCosts: [
-              { name: 'Texnika və Qazma', desc: 'Ekskavator (17m³ x 5₼) + Əl işi (67pm x 1.5₼) + Döyəc (30₼)', amount: 215.50 },
-              { name: 'Hazırlıq Yastığı', desc: 'Şeben (6.7m³ x 18₼) + M150 Beton (6.7m³ x 65₼)', amount: 556.10 },
-              { name: 'Armatur Karkas', desc: 'Armatur A400 (820kq x 1.05₼) + Toxunma Usta (82₼)', amount: 943.00 },
-              { name: 'Əsas Beton (M350)', desc: 'M350 (13.4m³ x 85₼) + Taxta Qəlib/Usta (53.6m² x 6₼)', amount: 1460.60 },
-              { name: 'Kürsü Hörgüsü', desc: 'Daş (3000əd x 0.55₼) + Usta (600₼) + Sement (144₼)', amount: 2394.00 },
-              { name: 'Döşəmə Altı (0.00)', desc: 'Dolğu (9m³ x 15₼) + B20 Beton (9m³ x 75₼) + Usta (150₼)', amount: 960.00 } // Kürsü izolyasiyası daxil edilib
-            ],
-            checks: {
-              project: ['Bünövrənin oturma sahəsi (26.8m²) torpaq qırmızı xətlərinə tam uyğundurmu?', 'Lentvari təməl uzunluğu dəqiq 67 paqonmetr ölçülübmü?'],
-              engineering: ['Armaturun paspayı plastik dayaqlarla (min 3-5sm) təmin edilibmi?', 'Beton tökülərkən məcburi vibratordan istifadə edildimi?']
-            },
-            sequence: [
-              { 
-                title: 'Adım 1: Layihə Oxlarının Vurulması', 
-                desc: 'Lazer nivelir ilə gələcək döşəmənin "0.00" nöqtəsi təyin edilir və iplər çəkilir.',
-                calcBasis: '40 ədəd qazıq x 0.50 ₼ = 20.00 ₼\nİp/Əhəng = 10.00 ₼\nNivelir xidməti = 80.00 ₼',
-                materialsData: [{ name: 'Sərfiyyat (Qazıq, İp)', qty: 'Dəst', use: '30.00 ₼' }],
-                materialCost: 30.00, laborCost: 80.00 
-              },
-              { 
-                title: 'Adım 2: Çuxurun Qazılması', 
-                desc: 'Ekskavatorla qazıntı, əl ilə düzləndirmə və viroplita ilə kipləşdirmə.',
-                calcBasis: 'Ekskavator: 17 m³ x 5.00 ₼ = 85.00 ₼\nƏl təmizləmə: 67 pm x 1.50 ₼ = 100.50 ₼\nViroplita (döyəc) icarəsi = 30.00 ₼',
-                materialsData: [{ name: 'Ekskavator İcarəsi', qty: '17 m³', use: '85.00 ₼' }],
-                materialCost: 85.00, laborCost: 130.50 
-              },
-              { 
-                title: 'Adım 3: Şeben və Podbetonka', 
-                desc: 'Torpağın nəm çəkməməsi üçün şeben və M150 hazırlıq betonu.',
-                calcBasis: 'Şeben (Kamaz birbaşa): 6.7 m³ x 18.00 ₼ = 120.60 ₼\nBeton M150: 6.7 m³ x 65.00 ₼ = 435.50 ₼',
-                materialsData: [
-                  { name: 'Şeben (Karbonat)', qty: '6.7 m³', use: '120.60 ₼' },
-                  { name: 'M150 Hazır Beton', qty: '6.7 m³', use: '435.50 ₼' }
-                ],
-                materialCost: 556.10, laborCost: 0.00 
-              },
-              { 
-                title: 'Adım 4: Karkas və M350 Beton', 
-                desc: 'Armatur toxunur və zavod betonu (M350) fasiləsiz tökülür.',
-                calcBasis: 'Armatur A400: 0.82 ton x 1050 ₼ = 861.00 ₼\nBeton M350: 13.4 m³ x 85.00 ₼ = 1139.00 ₼\nQəlib/Taxta Usta: 53.6 m² x 6.00 ₼ = 321.60 ₼\nArmatur usta: 0.82t x 100 ₼ = 82.00 ₼',
-                materialsData: [
-                  { name: 'Armatur A400', qty: '0.82 Ton', use: '861.00 ₼' },
-                  { name: 'M350 (B25) Beton', qty: '13.4 m³', use: '1139.00 ₼' }
-                ],
-                materialCost: 2000.00, laborCost: 403.60 
-              }
-            ],
-            warnings: 'M150 hazırlıq qatı olmadan birbaşa torpağa M350 tökülməsi betonun "şirəsini" torpağa canına çəkəcək və marka gücünü itirəcək.'
-          },
-          masonry: {
-            id: 'masonry', title: 'Daşıyıcı Hörgü və Kəmərlər', cost: 8352.00,
-            icon: 'Home', color: 'bg-amber-600', hoverColor: 'hover:fill-amber-500',
-            description: '3.4m xalis hündürlükdə qoşa/tək daş hörgüsü, lintellər və seysmik kəmərlər.',
-            subCosts: [
-              { name: 'Xarici Divar (156 m²)', desc: 'Daş (3432əd x 0.55₼) + Sement (612₼) + Qum (336₼) + Usta (686₼)', amount: 3521.60 },
-              { name: 'Daxili Divar (117 m²)', desc: 'Daş (1287əd x 0.55₼) + Sem/Qum (250₼) + Usta (257₼)', amount: 1214.85 },
-              { name: 'Lintellər (14 ədəd)', desc: 'Hazır Lintel (14 x 10₼) + Montaj Usta (40₼)', amount: 180.00 },
-              { name: 'Seysmik Kəmər', desc: 'M250 Beton (22.68m³ x 75₼) + Armatur (900kq x 1.05₼) + Usta (300₼)', amount: 2946.00 },
-              { name: 'Parapet Hörgüsü', desc: 'Daş (800əd x 0.55₼) + Usta (160₼) + Məhlul (100₼) + Beton Kəmər (180₼)', amount: 880.00 }
-            ],
-            checks: {
-              project: ['Divar hündürlüyü layihədəki kimi xalis 3.40m-dirmi?', 'Otaq küncləri diaqonalla (Pifaqor 3-4-5) 90 dərəcə yoxlanılıbmı?'],
-              engineering: ['Hər 4-5 sıradan bir hörgüyə zəlzələ üçün polad məftil (tor) atılıbmı?']
-            },
-            sequence: [
-              { 
-                title: 'Adım 1: Xarici Qoşa Hörgü', 
-                desc: 'Evin 40sm qalınlıqlı əsas yükdaşıyan divarlarının hörgüsü.',
-                calcBasis: 'Daş (Sexdən): 3432 əd x 0.55 ₼ = 1887.60 ₼\nSement (Zavod topdan): 85 kisə x 7.20 ₼ = 612.00 ₼\nQum (Kamaz): 12 m³ x 28.00 ₼ = 336.00 ₼\nUsta: 3432 əd x 0.20 ₼ = 686.40 ₼',
-                materialsData: [
-                  { name: 'Güzdək Kubiki', qty: '3432 əd', use: '1887.60 ₼' },
-                  { name: 'Sement / Qum', qty: 'Kompleks', use: '948.00 ₼' }
-                ],
-                materialCost: 2835.60, laborCost: 686.40 
-              },
-              { 
-                title: 'Adım 2: Daxili Arakəsmələr', 
-                desc: 'Tək hörgü (20sm) ilə otaqların bölünməsi.',
-                calcBasis: 'Daş: 1287 əd x 0.55 ₼ = 707.85 ₼\nSem/Qum: Mütənasib ~250.00 ₼\nUsta: 1287 əd x 0.20 ₼ = 257.40 ₼',
-                materialsData: [
-                  { name: 'Kubik (Tək hörgü)', qty: '1287 əd', use: '707.85 ₼' }
-                ],
-                materialCost: 957.85, laborCost: 257.40 
-              },
-              { 
-                title: 'Adım 3: Monolit Seysmik Kəmər', 
-                desc: 'Hörgünün üstündən 67pm fırlanan monolit dəmir-beton kəmər.',
-                calcBasis: 'Beton M250: 22.68 m³ x 75.00 ₼ = 1701.00 ₼\nArmatur: 0.9 ton x 1050 ₼ = 945.00 ₼\nUsta/Qəlib: Kompleks 300.00 ₼',
-                materialsData: [
-                  { name: 'Beton M250', qty: '22.68 m³', use: '1701.00 ₼' },
-                  { name: 'Armatur', qty: '0.9 ton', use: '945.00 ₼' }
-                ],
-                materialCost: 2646.00, laborCost: 300.00 
-              }
-            ],
-            warnings: 'Hündürlük 3.4m olduğu üçün şaquldən 1-2sm kənara çıxma, gələcəkdə suvaq xərcini 2 qat artıracaq.'
-          },
-          interior: {
-            id: 'interior', title: 'Daxili Təmir və Bəzək', cost: 10425.00,
-            icon: 'PaintBucket', color: 'bg-blue-600', hoverColor: 'hover:fill-blue-500',
-            description: 'Styaşka, mayaklı gips suvaq, alçipan tavan, kafel və laminat işləri.',
-            subCosts: [
-              { name: 'Styaşka (Döşəmə Betonu)', desc: 'Material (90m² x 3.5₼) + Usta (90m² x 2.5₼)', amount: 540.00 },
-              { name: 'Suvaq və Alçipan Tavan', desc: 'Gips/Mayak (890₼) + Alçipan (700₼) + Usta (Suvaq 1428₼, Tavan 540₼)', amount: 3558.00 },
-              { name: 'Şpaklovka və Boya', desc: 'Material (402m² x 2.5₼) + Malyar (402m² x 3.5₼)', amount: 2412.00 },
-              { name: 'Keramaqranit Kafel', desc: 'Kafel (85m² x 9₼) + Yapışdırıcı (150₼) + Usta (85m² x 10₼)', amount: 1765.00 },
-              { name: 'Laminat və Plintus', desc: 'Laminat (65m² x 10₼) + Plintus (144₼) + Usta (162₼)', amount: 956.00 },
-              { name: 'Otaq qapıları (Əlavə qeyd)', desc: 'Gözlənilməz material ehtiyatı', amount: 1194.00 }
-            ],
-            checks: {
-              project: ['Alçipan tavanın spot kəsim yerləri elektrik planı ilə üst-üstə düşürmü?'],
-              engineering: ['Styaşkanın nəmişliyi cihazla (max 4%) ölçüldükdən sonra laminat vurulurmu?']
-            },
-            sequence: [
-              { 
-                title: 'Adım 1: Mayaklı Gips Suvaq', 
-                desc: 'Bütün divarlar (357m²) lazerlə dümdüz suvanır.',
-                calcBasis: 'Gips: 178 kisə x 4.80 ₼ = 854.40 ₼ (Mayak daxil ~890₼)\nUsta: 357 m² x 4.00 ₼ = 1428.00 ₼',
-                materialsData: [
-                  { name: 'Gips Sement/Astar', qty: '178 kisə', use: '854.40 ₼' }
-                ],
-                materialCost: 890.00, laborCost: 1428.00 
-              },
-              { 
-                title: 'Adım 2: Tavan və Boya (Malyar)', 
-                desc: 'Alçipan asılır, şpaklovka (402m²) və su əsaslı boya vurulur.',
-                calcBasis: 'Alçipan/Profil (90m²): ~700.00 ₼, Usta (Tavan): 540.00 ₼\nBoya/Şpaklovka Material: 402 m² x 2.50 ₼ = 1005.00 ₼\nMalyar Usta: 402 m² x 3.50 ₼ = 1407.00 ₼',
-                materialsData: [
-                  { name: 'Boya / Şpaklovka', qty: '402 m²', use: '1005.00 ₼' },
-                  { name: 'Alçipan Sistem', qty: '90 m²', use: '700.00 ₼' }
-                ],
-                materialCost: 1705.00, laborCost: 1947.00 
-              },
-              { 
-                title: 'Adım 3: Döşəmə (Kafel + Laminat)', 
-                desc: 'Sanuzel/Mətbəxə kafel (85m²), digər otaqlara laminat (65m²).',
-                calcBasis: 'Kafel (Topdan): 85 m² x 9.00 ₼ = 765.00 ₼\nLaminat (Dərnəgül): 65 m² x 10.00 ₼ = 650.00 ₼\nUsta Kafel: 850 ₼, Usta Laminat: 162.50 ₼',
-                materialsData: [
-                  { name: 'Kafel (Sədərək)', qty: '85 m²', use: '765.00 ₼' },
-                  { name: 'Laminat 8mm', qty: '65 m²', use: '650.00 ₼' }
-                ],
-                materialCost: 1684.00, laborCost: 1012.50 
-              }
-            ],
-            warnings: 'Laminatı tələm-tələsik nəm betona vurmaq qabarma və şişməyə səbəb olacaq.'
-          },
-          roof: {
-            id: 'roof', title: 'Dam və İzolyasiya İşi', cost: 4216.00,
-            icon: 'Home', color: 'bg-red-700', hoverColor: 'hover:fill-red-600',
-            description: 'Taxtabənd karkası, profnastil sac örtük və SBS + EPS izolyasiyası.',
-            subCosts: [
-              { name: 'Taxta Karkas', desc: 'Konstruksiya taxtası (4m³ x 280₼) + Usta (125m² x 5₼)', amount: 1745.00 },
-              { name: 'İzolyasiya Sistemi', desc: 'SBS Membran (137.5m² x 4.5₼) + Penoplex (117m² x 4₼) + Usta (250₼)', amount: 1336.00 },
-              { name: 'Dam Örtüyü', desc: 'Profnastil 0.45mm (125m² x 7₼) + Nov (100₼) + Usta (260₼)', amount: 1135.00 }
-            ],
-            checks: {
-              engineering: ['Dam altı havalandırma (ventilyasiya) boşluğu nəzərə alınıbmı?']
-            },
-            sequence: [
-              { 
-                title: 'Adım 1: Taxta Konstruksiya', 
-                desc: 'Ucuz amma keyfiyyətli taxta (Dərnəgül topdan) ilə skelet yığılır.',
-                calcBasis: 'Taxta: 4 m³ x 280.00 ₼ = 1120.00 ₼\nBolt/Vint: 60.00 ₼\nUsta: 125 m² x 4.5 ₼ = 565.00 ₼',
-                materialsData: [{ name: 'Taxta', qty: '4 m³', use: '1120.00 ₼' }],
-                materialCost: 1180.00, laborCost: 565.00 
-              },
-              { 
-                title: 'Adım 2: Örtük və İzolyasiya', 
-                desc: 'SBS membran yapışdırılır, üstündən 0.45mm profnastil vurulur.',
-                calcBasis: 'SBS: 137.5 m² x 4.50 ₼ = 618.75 ₼\nProfnastil: 125 m² x 7.00 ₼ = 875.00 ₼\nUsta (Kompleks): 510.00 ₼',
-                materialsData: [
-                  { name: 'SBS Membran', qty: '137.5 m²', use: '618.75 ₼' },
-                  { name: 'Profnastil 0.45mm', qty: '125 m²', use: '875.00 ₼' }
-                ],
-                materialCost: 1493.75, laborCost: 510.00 
-              }
-            ],
-            warnings: 'Taxtalar arası izolyasiya kip vurulmazsa, isti-soyuq toqquşub tərləmə (kif) yaradacaq.'
-          },
-          plumbing: {
-            id: 'plumbing', title: 'Sanitar/Su Sistemləri', cost: 2695.00,
-            icon: 'Droplet', color: 'bg-cyan-700', hoverColor: 'hover:fill-cyan-600',
-            description: 'Kanalizasiya (38m), PPR su xətləri (60m) və Hamam kafel/avadanlığı.',
-            subCosts: [
-              { name: 'Boru Xətləri (İç/Çöl)', desc: 'PVC/PPR Borular (200₼) + Usta/Test (250₼)', amount: 450.00 },
-              { name: 'Septik Tank (3m³)', desc: 'Hazır septik tank (300₼) + Quraşdırma/Qazıntı (150₼)', amount: 450.00 },
-              { name: 'Sanitar Avadanlıqlar', desc: 'Unitaz/Duş/Lavabo Dəsti (1500₼ bazardan ucuz 1100₼ topdan) + Usta (200₼)', amount: 1300.00 },
-              { name: 'Hamam İzolyasiyası', desc: 'Sürmə izolyasiya materialı (250₼) + Asma tavan (245₼)', amount: 495.00 }
-            ],
-            checks: {
-              engineering: ['Bütün su xətləri 24 saatlıq PRES TESTİ-ndən keçdimi?']
-            },
-            sequence: [
-              { 
-                title: 'Adım 1: Borulama və Test', 
-                desc: 'Çirkab PVC və Təmiz su PPR boruları çəkilir.',
-                calcBasis: 'PVC Boru: 38m x 2.50 ₼ = 95.00 ₼\nPPR Boru: 60m x 1.50 ₼ = 90.00 ₼\nUsta / Presləmə Testi = 250.00 ₼',
-                materialsData: [{ name: 'Boru Komplekti', qty: 'Dəst', use: '185.00 ₼' }],
-                materialCost: 185.00, laborCost: 250.00 
-              },
-              { 
-                title: 'Adım 2: Avadanlıq Montajı', 
-                desc: 'Kafeldən sonra unitaz, lavabo, duş quraşdırılır.',
-                calcBasis: 'Santexnika Dəsti (Sədərək topdan): 1100.00 ₼\nUsta montaj xidməti: 200.00 ₼',
-                materialsData: [{ name: 'Santexnika Dəst', qty: '2 Dəst', use: '1100.00 ₼' }],
-                materialCost: 1100.00, laborCost: 200.00 
-              }
-            ],
-            warnings: 'Borularda mikro sızma laminatı tamamilə şişirdib məhv edəcək. Test şərtdir!'
-          },
-          electro_heating: {
-            id: 'electro_heating', title: 'Elektrik və Kombi Sistemi', cost: 3108.00,
-            icon: 'Zap', color: 'bg-orange-600', hoverColor: 'hover:fill-orange-500',
-            description: 'NYM-J kabelləşmə (690m), UZO-lu şit və Kombi-Radiator sistemi.',
-            subCosts: [
-              { name: 'Kabelləşmə (690m)', desc: 'Kabel (690m x 1.00₼) + Usta (690m x 0.80₼)', amount: 1242.00 },
-              { name: 'Elektrik Şiti (UZO)', desc: 'Şit/Avtomatlar (80₼) + UZO 30mA (60₼) + Usta (60₼)', amount: 200.00 },
-              { name: 'Açarlar/Rozetkalar', desc: 'Material (40 əd x 3.5₼) + Usta (80₼)', amount: 220.00 },
-              { name: 'Radiatorlar', desc: 'Bimetal (60 dilim x 10₼) + Boru (100₼) + Usta (120₼)', amount: 820.00 },
-              { name: 'Kombi Aparatı', desc: 'Kombi 28kW (550₼) + Quraşdırma (76₼)', amount: 626.00 }
-            ],
-            checks: {
-              project: ['Açarların yeri mebel planı (gardırop/çarpayı kənarı) nəzərə alınaraq verilibmi?'],
-              engineering: ['İnsan həyatını qoruyan UZO (0.03s) sistemi quraşdırılıbmı?']
-            },
-            sequence: [
-              { 
-                title: 'Adım 1: Elektrik Çəkilişi', 
-                desc: 'Yanmaz kabellərlə ştrobların açılıb döşənməsi.',
-                calcBasis: 'Kabel (Topdan): 690 m x 1.00 ₼ = 690.00 ₼\nUsta işi: 690 m x 0.80 ₼ = 552.00 ₼',
-                materialsData: [{ name: 'NYM-J Kabel', qty: '690 m', use: '690.00 ₼' }],
-                materialCost: 690.00, laborCost: 552.00 
-              },
-              { 
-                title: 'Adım 2: Kombi və Radiator', 
-                desc: 'Pəncərə altı istilik boruları və radiatorların quraşdırılması.',
-                calcBasis: 'Kombi (Topdan bazası): 550.00 ₼\nRadiator (Bimetal): 60 dilim x 10 ₼ = 600.00 ₼\nUsta / PPR Boru: 296.00 ₼',
-                materialsData: [
-                  { name: 'Kombi 28kW', qty: '1 əd', use: '550.00 ₼' },
-                  { name: 'Radiator', qty: '60 dilim', use: '600.00 ₼' }
-                ],
-                materialCost: 1150.00, laborCost: 296.00 
-              }
-            ],
-            warnings: 'Şitdə UZO (Qaçqın cərəyan) qoyulmaması birbaşa təhlükəsizlik qaydasının pozulmasıdır.'
-          },
-          exterior: {
-            id: 'exterior', title: 'Fasad və Həyət', cost: 3662.00,
-            icon: 'Map', color: 'bg-emerald-600', hoverColor: 'hover:fill-emerald-500',
-            description: 'Torlu fasad suvağı (214m²), həyət tameti (80m²) və abadlıq.',
-            subCosts: [
-              { name: 'Fasad Tor və Astar', desc: 'Material (214m² x 1.5₼) + Usta (214m² x 3₼)', amount: 963.00 },
-              { name: 'Fasad Boya', desc: 'Boya (214m² x 2.5₼) + Malyar (214m² x 4₼)', amount: 1391.00 },
-              { name: 'Həyət Tameti (80m²)', desc: 'R11 Kafel (80m² x 9₼) + Sement/Beton (200₼) + Usta (388₼)', amount: 1308.00 }
-            ],
-            checks: {
-              project: ['Həyətin mailliyi yağış sularını evdən uzaqlaşdıracaq 1-2% əyimi təmin edirmi?']
-            },
-            sequence: [
-              { 
-                title: 'Adım 1: Fasad İşi', 
-                desc: 'Çatlamanın qarşısını alan torlu suvaq və silikon boya.',
-                calcBasis: 'Tor/Boya Material: 214 m² x 4.00 ₼ = 856.00 ₼\nUsta: 214 m² x 7.00 ₼ = 1498.00 ₼',
-                materialsData: [{ name: 'Silikon Boya + Tor', qty: '214 m²', use: '856.00 ₼' }],
-                materialCost: 856.00, laborCost: 1498.00 
-              },
-              { 
-                title: 'Adım 2: Həyət Tameti', 
-                desc: '80m² əraziyə R11 şaxtaya davamlı kafel döşənir.',
-                calcBasis: 'Kafel (Topdan): 80 m² x 9.00 ₼ = 720.00 ₼\nBeton/Yapışdırıcı: ~200 ₼\nUsta: 80 m² x 4.85 ₼ = 388.00 ₼',
-                materialsData: [{ name: 'R11 Çöl Tameti', qty: '80 m²', use: '720.00 ₼' }],
-                materialCost: 920.00, laborCost: 388.00 
-              }
-            ],
-            warnings: 'Fasad boyası soyuqda (+5°C altı) və ya rütubətdə vurulsa qabarıb töküləcək.'
-          },
-          doors_windows: {
-            id: 'doors_windows', title: 'Qapı və Pəncərələr', cost: 3010.00,
-            icon: 'DoorClosed', color: 'bg-sky-700', hoverColor: 'hover:fill-sky-600',
-            description: 'PVC pəncərə (34m²), Çelik qapı (1əd) və MDF daxili qapılar (6əd).',
-            subCosts: [
-              { name: 'Xarici Pəncərələr', desc: 'PVC 70mm Antrasit Sex (34m² x 55₼) + Köpük/Usta (100₼)', amount: 1970.00 },
-              { name: 'Giriş Qapısı', desc: 'Ağır Çelik Qapı Sədərək (250₼) + Montaj (50₼)', amount: 300.00 },
-              { name: 'Daxili Qapılar', desc: 'MDF Qapı (6əd x 110₼) + PVC Qapı (80₼) + Usta Montaj (100₼) ', amount: 740.00 }
-            ],
-            checks: {
-              project: ['Pəncərə çərçivələri poliuretan köpüklə tam kipləşdirilibmi?']
-            },
-            sequence: [
-              { 
-                title: 'Adım 1: Pəncərələr', 
-                desc: 'Fasad vurulmadan əvvəl pəncərələrin qoyulması və köpüklənməsi.',
-                calcBasis: 'PVC 70mm (Yerli Sex): 34 m² x 55.00 ₼ = 1870.00 ₼\nKöpük və Usta montajı: 100.00 ₼',
-                materialsData: [{ name: 'PVC 70mm', qty: '34 m²', use: '1870.00 ₼' }],
-                materialCost: 1870.00, laborCost: 100.00 
-              },
-              { 
-                title: 'Adım 2: Daxili Qapılar', 
-                desc: 'MDF qapılar mütləq şəkildə DÖŞƏMƏ VƏ BOYA QURUDUQDAN sonra asılır.',
-                calcBasis: 'MDF Qapı (Sex): 6 əd x 110.00 ₼ = 660.00 ₼\nUsta Montaj: 100.00 ₼',
-                materialsData: [{ name: 'MDF Qapı', qty: '6 əd', use: '660.00 ₼' }],
-                materialCost: 660.00, laborCost: 100.00 
-              }
-            ],
-            warnings: 'Qapılar təmirin ortasında nəm mühitdə (suvaq/styaşka zamanı) asılarsa qısa müddətdə şişəcək.'
-          },
-          pool: {
-            id: 'pool', title: 'Hovuz İnşası (6x3m)', cost: 5885.00,
-            icon: 'Droplet', color: 'bg-teal-600', hoverColor: 'hover:fill-teal-500',
-            description: 'Beton çanaq, epoksi yapışdırıcılı mozaika və nasos/filtrasiya.',
-            subCosts: [
-              { name: 'Qazıntı/Armatur/Beton', desc: 'B25 Beton (12m³ x 85₼) + Armatur (850kq x 1.05₼) + Qazıntı/Usta (800₼)', amount: 2712.50 },
-              { name: 'İzolyasiya və Mozaika', desc: 'Mozaika (60m² x 15₼) + Epoksi İzol (600₼) + Usta (672.5₼)', amount: 2172.50 },
-              { name: 'Motor və Filtrasiya', desc: 'Baza Filtr Dəsti (800₼) + Montaj (200₼)', amount: 1000.00 }
-            ],
-            checks: {
-              engineering: ['Hovuz 72 saatlıq "Sızma Testi"ndən (Su ilə doldurularaq) keçdimi?']
-            },
-            sequence: [
-              { 
-                title: 'Adım 1: Monolit Çanaq', 
-                desc: 'Penetron qatqılı beton fasiləsiz tökülür.',
-                calcBasis: 'B25 Beton: 12 m³ x 85.00 ₼ = 1020.00 ₼\nArmatur: 850 kq x 1.05 ₼ = 892.50 ₼\nQazıntı və Qəlib/Usta: 800.00 ₼',
-                materialsData: [{ name: 'Beton+Armatur', qty: 'Dəst', use: '1912.50 ₼' }],
-                materialCost: 1912.50, laborCost: 800.00 
-              },
-              { 
-                title: 'Adım 2: Mozaika və Sistem', 
-                desc: 'Sızma testindən sonra epoksi ilə mozaika düzülür.',
-                calcBasis: 'Mozaika (Sədərək): 60 m² x 15.00 ₼ = 900.00 ₼\nFiltr/Motor (Ucuz alternativ): 800.00 ₼\nUsta İşi: 872.50 ₼',
-                materialsData: [{ name: 'Mozaika + Motor', qty: 'Dəst', use: '1700.00 ₼' }],
-                materialCost: 1700.00, laborCost: 872.50 
-              }
-            ],
-            warnings: 'Hovuz kafelində adi sement yapışdırıcı istifadə etmək qadağandır, xlor məhv edəcək.'
-          },
-          furniture: {
-            id: 'furniture', title: 'Mebel və Avadanlıqlar', cost: 4400.00,
-            icon: 'Package', color: 'bg-purple-600', hoverColor: 'hover:fill-purple-500',
-            description: 'Laminat MDF mətbəx dəsti, 3 gardırop, çarpayılar və zəruri texnika.',
-            subCosts: [
-              { name: 'Mətbəx Mebeli (3.5pm)', desc: 'Ucuz laminat/MDF (3.5m x 250₼) + Usta montaj (125₼)', amount: 1000.00 },
-              { name: 'Zəruri Texnika', desc: 'Soba/Davlumbaz/Lavabo (500₼) + Soyuducu (400₼)', amount: 900.00 },
-              { name: 'Yataq və Gardıroplar', desc: '3 Gardırop (3 x 250₼ = 750₼) + 3 Çarpayı (1000₼)', amount: 1750.00 },
-              { name: 'Zal Divanı', desc: 'Baza L-Divan Sədərək (750₼)', amount: 750.00 }
-            ],
-            checks: {
-              project: ['Ağır şkaflar aşmamaq üçün daş divara (L-anekerlə) bağlanıbmı?']
-            },
-            sequence: [
-              { 
-                title: 'Adım 1: Mətbəx Montajı', 
-                desc: 'Baza dolablar qurulur, künclər nəmə qarşı silikonlanır.',
-                calcBasis: 'Mətbəx MDF (Sex): 3.5 m x 250 ₼ = 875 ₼\nTexnikalar: 900 ₼. Usta: 125 ₼',
-                materialsData: [{ name: 'Mətbəx Mebeli', qty: '3.5 pm', use: '875.00 ₼' }],
-                materialCost: 1775.00, laborCost: 125.00 
-              },
-              { 
-                title: 'Adım 2: Otaq Mebelləri', 
-                desc: 'Gardıroplar və çarpayılar quraşdırılır.',
-                calcBasis: 'Gardırop (Yerli sex): 3 əd x 250 ₼ = 750 ₼\nYataq Dəstləri + Divan: 1750 ₼',
-                materialsData: [{ name: 'Gardırop / Yataq', qty: 'Kompleks', use: '2500.00 ₼' }],
-                materialCost: 2500.00, laborCost: 0.00 
-              }
-            ],
-            warnings: 'Ağır asma dolabları alçipana qətiyyən bağlamayın, mütləq arxadakı beton/daşa çatdırın.'
-          }
-        };
+// ─────────────────── MINIMUM PRICE MARKET DATA ───────────────────
+const MATERIALS_DATA = [
+  {cat:'Bünövrə & Hörgü', items:[
+    {name:'Mişar Daşı (Kubik) 20×20×40sm', unit:'ədəd', minPrice:0.55, regPrice:0.62, source:'Novxanı/Binə material bazarı'},
+    {name:'Güzdək Daşı (Bünövrə)', unit:'m²', minPrice:7.50, regPrice:10.00, source:'Novxanı kərpic zavodları'},
+    {name:'Portland Sement M400', unit:'kisə (42.5kq)', minPrice:7.00, regPrice:8.00, source:'Birbaşa zavod (Qaradağ)'},
+    {name:'Portland Sement M500', unit:'kisə (42.5kq)', minPrice:7.80, regPrice:9.00, source:'Birbaşa zavod (Qaradağ)'},
+    {name:'Yuyulmuş Qum', unit:'m³', minPrice:27.00, regPrice:36.25, source:'Birbaşa qum mədəni'},
+    {name:'Çay Qumu (Adi)', unit:'m³', minPrice:20.00, regPrice:28.00, source:'Sumqayıt qum bazarı'},
+    {name:'Karbonat Şeben', unit:'m³', minPrice:17.00, regPrice:25.00, source:'Novxanı bazarı, böyük lot'},
+    {name:'Hörgü Toru (Ø4 Çelik)', unit:'m²', minPrice:1.20, regPrice:1.80, source:'Metal bazarı, Binə'},
+  ]},
+  {cat:'Beton & Armatur', items:[
+    {name:'Hazır Beton M350/B25', unit:'m³', minPrice:86.00, regPrice:95.00, source:'Novxanı beton stansiyası'},
+    {name:'Hazır Beton M250/B20', unit:'m³', minPrice:78.00, regPrice:88.00, source:'Novxanı beton stansiyası'},
+    {name:'Hazır Beton M150', unit:'m³', minPrice:65.00, regPrice:75.00, source:'Sifariş ilə hazırlanma'},
+    {name:'Armatur A400 Ø12', unit:'kq', minPrice:1.06, regPrice:1.16, source:'Metal bazarı (1 ton lotuyla)'},
+    {name:'Armatur A400 Ø8', unit:'kq', minPrice:1.08, regPrice:1.18, source:'Metal bazarı'},
+    {name:'Armatur A240 Ø6', unit:'kq', minPrice:0.95, regPrice:1.10, source:'Metal bazarı'},
+  ]},
+  {cat:'Örtük & İzolyasiya', items:[
+    {name:'Profnastil MP-20 0.45mm', unit:'m²', minPrice:7.00, regPrice:8.50, source:'Profnastil zavodları, topdan'},
+    {name:'SBS Membran (Su keçirməz)', unit:'m²', minPrice:4.80, regPrice:6.00, source:'İzolyasiya bazarı'},
+    {name:'XPS Penoplex 50mm', unit:'m²', minPrice:4.50, regPrice:5.50, source:'İnşaat materialları mağazası'},
+    {name:'Bitum Mastika', unit:'kq', minPrice:2.20, regPrice:3.50, source:'Boya-kimya mağazası'},
+    {name:'Konstruksiya Taxtası (I sinif)', unit:'m³', minPrice:290.00, regPrice:360.00, source:'Ağac bazarı, Biləcəri'},
+  ]},
+  {cat:'Pəncərə, Qapı', items:[
+    {name:'PVC Pəncərə 70mm 3-kameralı', unit:'m²', minPrice:60.00, regPrice:70.00, source:'Zavod birbaşa sifariş'},
+    {name:'PVC Pəncərə 58mm 2-kameralı', unit:'m²', minPrice:48.00, regPrice:58.00, source:'Bazarda rəqabət'},
+    {name:'Çelik Giriş Qapısı (3 kilit)', unit:'ədəd', minPrice:360.00, regPrice:450.00, source:'Pəncərə-qapı bazarı'},
+    {name:'MDF Daxili Qapı (dəst)', unit:'ədəd', minPrice:148.00, regPrice:180.00, source:'Topdan alış (6+ ədəd)'},
+    {name:'PVC Hamam Qapısı', unit:'ədəd', minPrice:95.00, regPrice:120.00, source:'Bazarda'},
+    {name:'Poliuretan Köpük 750ml', unit:'balon', minPrice:5.50, regPrice:7.50, source:'İnşaat materialları'},
+  ]},
+  {cat:'Döşəmə & Divar Örtüyü', items:[
+    {name:'Keramaqranit 60×60 (polished)', unit:'m²', minPrice:11.00, regPrice:15.00, source:'Kafel fabrikası birbaşa'},
+    {name:'Keramaqranit 30×30 (küçə, R11)', unit:'m²', minPrice:9.50, regPrice:12.00, source:'Kafel fabrikası'},
+    {name:'Laminat 8mm AC4', unit:'m²', minPrice:10.00, regPrice:14.00, source:'Topdan alış (50m²+)'},
+    {name:'Plintus (Döşəmə suvadı) 2.5m', unit:'ədəd', minPrice:2.80, regPrice:3.50, source:'Mebel bazarı'},
+    {name:'Yapışdırıcı C2 (kafel üçün)', unit:'kisə', minPrice:6.50, regPrice:8.00, source:'Kimyəvi material bazarı'},
+    {name:'Fuga (Kafel arasıdoldurma)', unit:'kq', minPrice:4.00, regPrice:6.00, source:'Kafel mağazaları'},
+  ]},
+  {cat:'Suvaq & Boya', items:[
+    {name:'Knauf Rotband Gips 30kq', unit:'kisə', minPrice:5.20, regPrice:6.50, source:'İnşaat mağazası'},
+    {name:'Alçipan 12.5mm GKB', unit:'m²', minPrice:3.50, regPrice:4.80, source:'Topdan alış'},
+    {name:'Alçipan Metal Profil CD', unit:'pm', minPrice:1.10, regPrice:1.50, source:'Metal bazarı'},
+    {name:'Üz Şpaklovka Knauf Finish', unit:'kisə (25kq)', minPrice:5.00, regPrice:7.00, source:'İnşaat mağazaları'},
+    {name:'Silikon Fasad Boyası', unit:'m²', minPrice:3.50, regPrice:5.00, source:'Boya mağazaları, topdan'},
+    {name:'İnteryər Emulsion Boya', unit:'m²', minPrice:2.50, regPrice:3.50, source:'Rəng mağazaları'},
+    {name:'Fiberglass Tor (Fasad)', unit:'m²', minPrice:1.60, regPrice:2.20, source:'İzolyasiya bazarı'},
+  ]},
+  {cat:'Santexnika & Su', items:[
+    {name:'PPR Boru 20mm', unit:'m', minPrice:2.20, regPrice:3.00, source:'Santexnika mağazası'},
+    {name:'PPR Boru 25mm', unit:'m', minPrice:2.90, regPrice:4.00, source:'Santexnika mağazası'},
+    {name:'PVC Kanalizasiya 110mm', unit:'m', minPrice:3.00, regPrice:4.00, source:'Santexnika bazarı'},
+    {name:'PVC Kanalizasiya 50mm', unit:'m', minPrice:1.80, regPrice:2.50, source:'Santexnika bazarı'},
+    {name:'Septik Tank (2-kameralı 3m³)', unit:'ədəd', minPrice:490.00, regPrice:600.00, source:'Septik istehsalçısı'},
+    {name:'Unitaz (standart, asılı yox)', unit:'ədəd', minPrice:110.00, regPrice:150.00, source:'Santexnika mağazası'},
+    {name:'Lavabo (oval 60sm)', unit:'ədəd', minPrice:75.00, regPrice:100.00, source:'Santexnika mağazası'},
+    {name:'Duş Kabinası (80×80)', unit:'ədəd', minPrice:255.00, regPrice:320.00, source:'Santexnika bazarı'},
+    {name:'Batareya/Kran Dəsti', unit:'ədəd', minPrice:58.00, regPrice:80.00, source:'Santexnika mağazaları'},
+  ]},
+  {cat:'Elektrik & İstilik', items:[
+    {name:'NYM-J Kabel 3×2.5mm²', unit:'m', minPrice:0.95, regPrice:1.20, source:'Elektrik materialı bazarı'},
+    {name:'NYM-J Kabel 3×1.5mm²', unit:'m', minPrice:0.65, regPrice:0.85, source:'Elektrik materialı bazarı'},
+    {name:'Qofra Boru 16mm (Elektrik)', unit:'m', minPrice:0.25, regPrice:0.40, source:'Topdan'},
+    {name:'Elektrik Şiti (24 modul)', unit:'ədəd', minPrice:40.00, regPrice:55.00, source:'Elektrik mağazası'},
+    {name:'UZO 25A / 30mA', unit:'ədəd', minPrice:68.00, regPrice:90.00, source:'Elektrik mağazası'},
+    {name:'Avtomat 16A / 10A', unit:'ədəd', minPrice:5.50, regPrice:8.00, source:'Elektrik mağazası'},
+    {name:'Rozetka + Açar Dəsti', unit:'ədəd', minPrice:4.00, regPrice:5.50, source:'Elektrik mağazaları'},
+    {name:'Kombi 28kW (Ermak/Protherm)', unit:'ədəd', minPrice:750.00, regPrice:900.00, source:'İstilik avadanlığı bazarı'},
+    {name:'Alüminium Radiator (1 dilim)', unit:'dilim', minPrice:9.50, regPrice:12.00, source:'Radiator mağazası'},
+    {name:'PP-R Istilik Borusu 20mm', unit:'m', minPrice:2.20, regPrice:3.00, source:'Santexnika mağazası'},
+  ]},
+  {cat:'Hovuz', items:[
+    {name:'Şüşə Mozaika (Hovuz)', unit:'m²', minPrice:20.00, regPrice:25.00, source:'Kafel/mozaika bazarı'},
+    {name:'Epoksi Yapışdırıcı (Hovuz)', unit:'kq', minPrice:18.00, regPrice:25.00, source:'Kimyəvi material bazarı'},
+    {name:'Penetron (Sukeçirməz əlavə)', unit:'kq', minPrice:12.00, regPrice:18.00, source:'İzolyasiya mağazaları'},
+    {name:'Qum Filtri + Nasos Dəsti', unit:'dəst', minPrice:1200.00, regPrice:1500.00, source:'Hovuz avadanlığı'},
+  ]},
+];
 
-        const VENDORS = [
-          { name: 'Daş (Güzdək Kubiki)', price: '0.55 ₼', oldPrice: '0.62 ₼', unit: 'ədəd' },
-          { name: 'Armatur A400 (Sex)', price: '1.05 ₼', oldPrice: '1.16 ₼', unit: 'kq' },
-          { name: 'Beton M350 (Nasosla)', price: '85.00 ₼', oldPrice: '95.00 ₼', unit: 'm³' },
-          { name: 'Qum (Kamaz birbaşa)', price: '28.00 ₼', oldPrice: '36.25 ₼', unit: 'm³' },
-          { name: 'Keramaqranit Kafel (Sədərək)', price: '9.00 ₼', oldPrice: '15.00 ₼', unit: 'm²' },
-          { name: 'Sement M400 (Topdan)', price: '7.20 ₼', oldPrice: '8.00 ₼', unit: 'kisə' },
-          { name: 'Laminat 8mm (Dərnəgül)', price: '10.00 ₼', oldPrice: '14.00 ₼', unit: 'm²' },
-          { name: 'Şeben Karbonat', price: '18.00 ₼', oldPrice: '25.00 ₼', unit: 'm³' },
-          { name: 'Profnastil 0.45mm (Zavod)', price: '7.00 ₼', oldPrice: '8.50 ₼', unit: 'm²' },
-          { name: 'PVC Pəncərə 70mm', price: '55.00 ₼', oldPrice: '70.00 ₼', unit: 'm²' }
-        ];
+const LABOR_DATA = [
+  {cat:'Torpaq & Bünövrə İşləri', items:[
+    {name:'Ekskavator (Qazıntı)', unit:'m³', minPrice:5.50, regPrice:7.00, source:'Maşın icarəsi bazarı'},
+    {name:'Viroplita (Torpaq kipləşdirmə)', unit:'pm', minPrice:1.30, regPrice:2.00, source:''},
+    {name:'Armatur toxunma ustası', unit:'kq', minPrice:0.13, regPrice:0.18, source:'Briqada ilə'},
+    {name:'Beton tökmə ustası', unit:'m³', minPrice:18.00, regPrice:25.00, source:''},
+    {name:'Kürsü hörgü ustası', unit:'m²', minPrice:3.50, regPrice:5.00, source:''},
+  ]},
+  {cat:'Hörgü İşləri', items:[
+    {name:'Divar Hörgü Ustası (Kubik)', unit:'daş/əd', minPrice:0.22, regPrice:0.30, source:'Briqada (min 4 nəfər)'},
+    {name:'Divar Hörgü Ustası (m²)', unit:'m²', minPrice:4.50, regPrice:7.00, source:''},
+    {name:'Lintel Quraşdırma', unit:'ədəd', minPrice:8.00, regPrice:15.00, source:''},
+  ]},
+  {cat:'Dam İşləri', items:[
+    {name:'Taxtabənd Quraşdırma', unit:'m²', minPrice:4.50, regPrice:6.00, source:'Dam ustası'},
+    {name:'İzolyasiya Döşəmə', unit:'m²', minPrice:2.80, regPrice:4.00, source:''},
+    {name:'Profnastil Örtük', unit:'m²', minPrice:2.20, regPrice:3.00, source:''},
+  ]},
+  {cat:'Suvaq & Boya', items:[
+    {name:'Mayaklı Suvaq Ustası', unit:'m²', minPrice:4.50, regPrice:6.00, source:'Briqada'},
+    {name:'Alçipan Tavan Ustası', unit:'m²', minPrice:7.00, regPrice:10.00, source:''},
+    {name:'Şpaklovka / Malyar', unit:'m²', minPrice:3.50, regPrice:5.00, source:''},
+    {name:'Fasad Suvaq Ustası', unit:'m²', minPrice:5.50, regPrice:8.00, source:''},
+    {name:'Styaşka Ustası', unit:'m²', minPrice:2.20, regPrice:3.00, source:''},
+  ]},
+  {cat:'Kafel & Döşəmə', items:[
+    {name:'Kafel Ustası (Daxili)', unit:'m²', minPrice:9.00, regPrice:12.00, source:''},
+    {name:'Küçə Tameti Ustası', unit:'m²', minPrice:7.00, regPrice:10.00, source:''},
+    {name:'Laminat Döşəyicisi', unit:'m²', minPrice:3.50, regPrice:5.00, source:''},
+  ]},
+  {cat:'Pəncərə & Qapı', items:[
+    {name:'Pəncərə Montaj Ustası', unit:'ədəd', minPrice:25.00, regPrice:35.00, source:''},
+    {name:'Qapı Montaj Ustası (Daxili)', unit:'ədəd', minPrice:25.00, regPrice:35.00, source:''},
+  ]},
+  {cat:'Santexnika', items:[
+    {name:'Santexnik (PPR Boru)', unit:'m', minPrice:2.50, regPrice:3.50, source:'Sertifikatlı'},
+    {name:'Santexnik (Avadanlıq montaj)', unit:'ədəd', minPrice:35.00, regPrice:50.00, source:''},
+    {name:'Kombi Quraşdırma', unit:'əmək', minPrice:75.00, regPrice:100.00, source:'Lisenziyalı qaz ustası'},
+    {name:'Radiator Quraşdırma', unit:'dilim', minPrice:0.80, regPrice:1.20, source:''},
+  ]},
+  {cat:'Elektrik', items:[
+    {name:'Elektrik Kabel Çəkişi', unit:'m', minPrice:0.75, regPrice:1.00, source:'Lisenziyalı elektrik'},
+    {name:'Elektrik Şiti Yığımı', unit:'modul', minPrice:3.50, regPrice:6.00, source:''},
+    {name:'Rozetka/Açar Montajı', unit:'ədəd', minPrice:2.00, regPrice:3.00, source:''},
+  ]},
+  {cat:'Hovuz', items:[
+    {name:'Hovuz Beton Ustası', unit:'m³', minPrice:40.00, regPrice:55.00, source:'Xüsusiyyəti var'},
+    {name:'Mozaika Ustası', unit:'m²', minPrice:15.00, regPrice:20.00, source:'Xüsusiyyəti var'},
+    {name:'Hovuz Sistemi Montajı', unit:'dəst', minPrice:320.00, regPrice:400.00, source:''},
+  ]},
+];
 
-        const TASKS = [
-          { id: 1, name: 'Təchizat Zəncirinin Qurulması (Min. Qiymət)', owner: 'Project Manager (PM)', status: 'progress', date: 'Bazar Araşdırması Gedir' },
-          { id: 2, name: 'Bünövrə və Torpaq İşlərinin İcrası', owner: 'Saha Rəisi', status: 'pending', date: 'Təchizat təsdiqlənəndə' },
-          { id: 3, name: 'Hörgü və Karkas Sisteminin Qurulması', owner: 'Usta Başı', status: 'pending', date: 'Gözləmədə' },
-          { id: 4, name: 'Mühəndislik Xətləri (Elektrik/Santexnika)', owner: 'Mühəndis', status: 'pending', date: 'Gözləmədə' }
-        ];
+// ─────────────────── PM TASKS ───────────────────
+const ALL_TASKS = [
+  {id:1, phase:'Hazırlıq (Faza 0)', name:'İnşaat icazəsinin (tikinti lisenziyasının) alınması', owner:'Sifariş verən (Sahibkar)', priority:'critical', status:'pending', week:'H-4', notes:'İCAZƏSİZ TİKİNTİ QANUNA ZIDDİR'},
+  {id:2, phase:'Hazırlıq (Faza 0)', name:'Geodezik ölçmə və torpaq qırmızı xətt sənədi', owner:'Lisenziyalı mühəndis', priority:'critical', status:'pending', week:'H-3', notes:'Torpaq parsel sənədinə uyğunluq'},
+  {id:3, phase:'Hazırlıq (Faza 0)', name:'Tam layihə çertyozlarının (arxitektura + konstruktiv) hazırlanması', owner:'Layihəçi', priority:'critical', status:'pending', week:'H-3', notes:'Dəyişikliklərin xərci ən az 2x artırır'},
+  {id:4, phase:'Hazırlıq (Faza 0)', name:'Büdcənin təsdiqlənməsi və tikinti büdcəsinin açılması', owner:'Sahibkar', priority:'high', status:'pending', week:'H-2', notes:'Min qiymət araşdırması əsasında'},
+  {id:5, phase:'Hazırlıq (Faza 0)', name:'Podratçı briqadaların seçilməsi və müqavilə imzalanması', owner:'Layihə Meneceri', priority:'high', status:'pending', week:'H-2', notes:'Bünövrə briqadası ilk lazım'},
+  {id:6, phase:'Hazırlıq (Faza 0)', name:'Material çatdırılması cədvəlinin hazırlanması (faza-faza)', owner:'Layihə Meneceri', priority:'medium', status:'pending', week:'H-2', notes:'Saxlama sahəsi planlanmalıdır'},
+  {id:7, phase:'Hazırlıq (Faza 0)', name:'Elektrik, su, kanalizasiya şəbəkəsinə qoşulma müraciəti', owner:'Sahibkar + Mühəndis', priority:'high', status:'pending', week:'H-2', notes:'Bu müraciətlər 1-3 ay çəkir'},
+  {id:8, phase:'Bünövrə (Faza 1)', name:'Sahənin hazırlanması: ağac kəsilməsi, köhnə konstruksiyalar', owner:'Briqada', priority:'high', status:'pending', week:'H-1', notes:''},
+  {id:9, phase:'Bünövrə (Faza 1)', name:'Geodezik ox vurma: köşegenlərin yoxlanması (Köşegen1 = Köşegen2)', owner:'Mühəndis', priority:'critical', status:'pending', week:'H-1', notes:'±5mm tolerans'},
+  {id:10, phase:'Bünövrə (Faza 1)', name:'Şeben + Podbetonka sifarişi (6.7m³ şeben + 6.7m³ M150)', owner:'Layihə Meneceri', priority:'high', status:'pending', week:'H-1', notes:'Gün əvvəlcədən sifariş'},
+  {id:11, phase:'Bünövrə (Faza 1)', name:'Ekskavator ilə qazıntı (17m³) + əl ilə təmizlənmə', owner:'Briqada', priority:'high', status:'pending', week:'H-1', notes:'Günün işidir'},
+  {id:12, phase:'Bünövrə (Faza 1)', name:'Armatur alınması: 820kq A400 Ø12+Ø8 + sertifikat yoxlaması', owner:'Layihə Meneceri', priority:'high', status:'pending', week:'1', notes:'Zavod sertifikatı tələb et'},
+  {id:13, phase:'Bünövrə (Faza 1)', name:'Armatur karkasının toxunması və qəlibinin qurulması', owner:'Briqada', priority:'high', status:'pending', week:'1-2', notes:'Paspayı ≥35mm'},
+  {id:14, phase:'Bünövrə (Faza 1)', name:'M350 beton sifarişi (13.4m³) — mütləq vibratorla tökmə', owner:'Briqada + Mühəndis', priority:'critical', status:'pending', week:'2', notes:'Fasiləsiz tökülməlidir'},
+  {id:15, phase:'Bünövrə (Faza 1)', name:'Bünövrənin qorunması (7 gün islaq saxlama, isti havada örtmə)', owner:'Briqada', priority:'high', status:'pending', week:'2-3', notes:'Günəşdə çat yaranmamaq üçün'},
+  {id:16, phase:'Bünövrə (Faza 1)', name:'Kürsü hörgüsü + bitum izolyasiya + döşəmə altı hazırlıq', owner:'Briqada', priority:'high', status:'pending', week:'3-4', notes:''},
+  {id:17, phase:'Hörgü (Faza 2)', name:'Xarici divar hörgüsü — hər 5 sıradan bir armatur toru', owner:'Hörgü Briqadası', priority:'critical', status:'pending', week:'4-7', notes:'Divarı sapla yoxlamaq'},
+  {id:18, phase:'Hörgü (Faza 2)', name:'Daş sifarişi (3432 + 1287 + 800 = cəmi 5519 əd)', owner:'Layihə Meneceri', priority:'high', status:'pending', week:'4', notes:'Qiymət üçün 3 vendordən qiymət al'},
+  {id:19, phase:'Hörgü (Faza 2)', name:'Lintellərin hazırlanması/alınması (14 ədəd)', owner:'Layihə Meneceri', priority:'high', status:'pending', week:'5', notes:'Hər pəncərə+qapı üzərinə'},
+  {id:20, phase:'Hörgü (Faza 2)', name:'Daxili arakəsmə divarların hörülməsi (1287 daş, 117m²)', owner:'Hörgü Briqadası', priority:'high', status:'pending', week:'7-9', notes:''},
+  {id:21, phase:'Hörgü (Faza 2)', name:'Seysmik kəmər armaturu + 22.68m³ B20 beton (fasiləsiz!)', owner:'Briqada + Mühəndis', priority:'critical', status:'pending', week:'9', notes:'Fotoqrafiya çəkil, akt imzala'},
+  {id:22, phase:'Hörgü (Faza 2)', name:'Parapet hörgüsü (800 daş) + üst beton kəmər', owner:'Hörgü Briqadası', priority:'high', status:'pending', week:'10', notes:''},
+  {id:23, phase:'Dam (Faza 3)', name:'Dam ustası ilə müqavilə + taxta materialı sifarişi (4m³)', owner:'Layihə Meneceri', priority:'high', status:'pending', week:'10', notes:'Taxta qurudulmuş olmalıdır'},
+  {id:24, phase:'Dam (Faza 3)', name:'Mauerlat ankerlənməsi + taxtabənd karkasının qurulması', owner:'Dam Briqadası', priority:'high', status:'pending', week:'11', notes:'Taxta antibakteria işlənmə'},
+  {id:25, phase:'Dam (Faza 3)', name:'XPS Penoplex (117m²) + SBS Membran (137.5m²) döşənməsi', owner:'Dam Briqadası', priority:'high', status:'pending', week:'12', notes:'Birləşmə yerlərini 15sm örtmə'},
+  {id:26, phase:'Dam (Faza 3)', name:'Profnastil örtük (125m²) + Nov sistemi (30pm)', owner:'Dam Briqadası', priority:'high', status:'pending', week:'12-13', notes:'Aşağıdan yuxarı örtülür'},
+  {id:27, phase:'Kommunikasiyalar (Faza 4)', name:'Pəncərə sifarişi: ölçü götürmə → PVC 70mm sifariş (34m²)', owner:'Layihə Meneceri', priority:'critical', status:'pending', week:'10', notes:'3-4 həftə gözləmə müddəti!'},
+  {id:28, phase:'Kommunikasiyalar (Faza 4)', name:'Elektrik mühəndisi ilə şema hazırlama (kabel marşrutları)', owner:'Elektrik Ustası', priority:'high', status:'pending', week:'11', notes:'Rozetka yerləri mebel planına görə'},
+  {id:29, phase:'Kommunikasiyalar (Faza 4)', name:'Kanalizasiya PVC boru (38m) çəkilişi (styaşkadan əvvəl!)', owner:'Santexnik Briqada', priority:'critical', status:'pending', week:'12', notes:'Meyl ≥2sm/m'},
+  {id:30, phase:'Kommunikasiyalar (Faza 4)', name:'Elektrik ştrobları açmaq + NYM kabel (690m) çəkilişi', owner:'Elektrik Briqadası', priority:'high', status:'pending', week:'12-13', notes:'Suvaqdan əvvəl bitməlidir'},
+  {id:31, phase:'Kommunikasiyalar (Faza 4)', name:'PPR su xətlərinin (60m) çəkilişi + 6 bar 24h presləmə testi', owner:'Santexnik', priority:'critical', status:'pending', week:'13', notes:'Test aktı imzalanmalı'},
+  {id:32, phase:'Kommunikasiyalar (Faza 4)', name:'Septik tankın qazılması + 2-kameralı tank quraşdırılması', owner:'Briqada + Santexnik', priority:'high', status:'pending', week:'13', notes:''},
+  {id:33, phase:'Daxili Təmir (Faza 5)', name:'Döşəmə styaşkasının tökülməsi (180m²) + lazerlə düzlük', owner:'Suvaq Briqadası', priority:'high', status:'pending', week:'14', notes:'28 gün quruma müddəti'},
+  {id:34, phase:'Daxili Təmir (Faza 5)', name:'Pəncərə + Çelik Qapı montajı (divarlar hazır olduqdan sonra)', owner:'Pəncərə Şirkəti', priority:'high', status:'pending', week:'14-15', notes:'Suvaqdan əvvəl edilir'},
+  {id:35, phase:'Daxili Təmir (Faza 5)', name:'Mayaklı suvaq (357m² divar + 90m² alçipan tavan)', owner:'Suvaq Briqadası', priority:'high', status:'pending', week:'15-17', notes:'Nəm 75% altında olmalıdır'},
+  {id:36, phase:'Daxili Təmir (Faza 5)', name:'Sanuzel hidro-izolyasiyası + 48 saat su testi + kafel (50m²)', owner:'Kafel Briqadası', priority:'critical', status:'pending', week:'17-18', notes:'Testdən əvvəl kafel olmaz'},
+  {id:37, phase:'Daxili Təmir (Faza 5)', name:'Şpaklovka (2 qat) + zımparalama + emulsion boya (402m²)', owner:'Malyar Briqadası', priority:'high', status:'pending', week:'18-20', notes:''},
+  {id:38, phase:'Daxili Təmir (Faza 5)', name:'Keramaqranit (85m²) + laminat (65m²) döşənməsi', owner:'Kafel+Laminat Ustası', priority:'high', status:'pending', week:'20-21', notes:'Nəm <75%RH yoxlanılsın'},
+  {id:39, phase:'Daxili Təmir (Faza 5)', name:'Elektrik şitinin yığımı: UZO + avtomatlar + test', owner:'Elektrik Ustası', priority:'critical', status:'pending', week:'20', notes:'UZO 30mA mütləq'},
+  {id:40, phase:'Daxili Təmir (Faza 5)', name:'Kombi quraşdırması (lisenziyalı qaz ustası) + radiatorlar', owner:'Istilik Ustası (Lisenziyalı)', priority:'critical', status:'pending', week:'21', notes:'Qaz xəttini özbaşına bağlamayın'},
+  {id:41, phase:'Daxili Təmir (Faza 5)', name:'Santexnika avadanlıqlarının montajı (unitaz, lavabo, duş)', owner:'Santexnik', priority:'high', status:'pending', week:'22', notes:''},
+  {id:42, phase:'Xarici İşlər (Faza 6)', name:'Fasad fiberglass toru + dekorativ suvaq + silikon boya (214m²)', owner:'Fasad Briqadası', priority:'high', status:'pending', week:'22-23', notes:'+5°C-dən aşağıda boya olmaz'},
+  {id:43, phase:'Xarici İşlər (Faza 6)', name:'Həyət tameti: beton hazırlıq + R11 küçə kafeli (80m²)', owner:'Kafel Briqadası', priority:'medium', status:'pending', week:'23-24', notes:'Maillik evin ÜZƏRİNDƏN deyil'},
+  {id:44, phase:'Xarici İşlər (Faza 6)', name:'Hovuz inşası: qazıntı → beton → test → mozaika → sistem', owner:'Hovuz Briqadası', priority:'medium', status:'pending', week:'22-26', notes:'Epoksi sement əvəz etmir'},
+  {id:45, phase:'Final (Faza 7)', name:'Daxili MDF qapıların asılması (boya tamam bitdikdən sonra)', owner:'Qapı Ustası', priority:'high', status:'pending', week:'24', notes:'Rütubət olarkən asmayın'},
+  {id:46, phase:'Final (Faza 7)', name:'Mebel sifarişi: mətbəx ölçüsünü götür → 3 həftə gözləmə', owner:'Layihə Meneceri', priority:'high', status:'pending', week:'23', notes:'Ölçü got, sonra sifariş ver'},
+  {id:47, phase:'Final (Faza 7)', name:'Texnika alınması: ocaq, qaput, soyuducu, paltaryuyan', owner:'Sahibkar', priority:'medium', status:'pending', week:'25', notes:''},
+  {id:48, phase:'Final (Faza 7)', name:'Mebel quraşdırılması: mətbəx → yataqlar → zal', owner:'Mebel Briqadası', priority:'high', status:'pending', week:'26-27', notes:'Gardıropları divara ankerlə!'},
+  {id:49, phase:'Final (Faza 7)', name:'Ümumilikdə son yoxlama: sızma, elektrik, qaz, istilik', owner:'Layihə Meneceri', priority:'critical', status:'pending', week:'28', notes:'Akt sənədi hazırla'},
+  {id:50, phase:'Final (Faza 7)', name:'Texniki pasport hazırlanması və qeydiyyata alınması', owner:'Sahibkar', priority:'high', status:'pending', week:'28-30', notes:''},
+];
 
-        const formatMoney = (amount) => new Intl.NumberFormat('az-AZ', { style: 'currency', currency: 'AZN', minimumFractionDigits: 2 }).format(amount);
+// ─────────────────── GRAND TOTAL CALC ───────────────────
+const CONSTRUCTION_KEYS = ['foundation','masonry','interior','roof','plumbing','electro_heating','exterior','doors_windows','pool'];
+const TOTAL_CONSTRUCTION = CONSTRUCTION_KEYS.reduce((s,k)=>s+CONSTRUCTION_DATA[k].cost, 0);
+const TOTAL_FURNITURE = CONSTRUCTION_DATA.furniture.cost;
+const GRAND_TOTAL = TOTAL_CONSTRUCTION + TOTAL_FURNITURE;
 
-        function App() {
-          const [viewMode, setViewMode] = useState('passport'); // Default to Passport
-          const [activeSection, setActiveSection] = useState('masonry');
-          const [activeTab, setActiveTab] = useState('sequence'); 
-          const [checkedItems, setCheckedItems] = useState({});
-
-          const totalConstruction = Object.values(CONSTRUCTION_DATA).filter(d => d.id !== 'furniture').reduce((acc, curr) => acc + curr.cost, 0);
-          const totalFurniture = CONSTRUCTION_DATA.furniture.cost;
-          const grandTotal = totalConstruction + totalFurniture;
-
-          const activeData = CONSTRUCTION_DATA[activeSection];
-
-          const toggleCheck = (id) => setCheckedItems(prev => ({ ...prev, [id]: !prev[id] }));
-
+// ─────────────────── PASSPORT VIEW ───────────────────
+function PassportSection({title, icon, items, color}) {
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+      <div className={`px-5 py-3 ${color} flex items-center gap-2.5`}>
+        <Icon name={icon} size={18} className="text-white opacity-80"/>
+        <h3 className="font-bold text-white text-sm uppercase tracking-widest">{title}</h3>
+      </div>
+      <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-2">
+        {items.map((item,i) => {
+          if (item.divider) return <div key={i} className="col-span-full border-t border-slate-700/60 my-1"/>;
           return (
-            <div className="min-h-screen p-3 md:p-6 fade-in">
-              
-              {/* TOP NAVIGATION */}
-              <div className="max-w-7xl mx-auto mb-6 bg-slate-900 rounded-3xl shadow-xl overflow-hidden flex flex-col xl:flex-row items-center justify-between border border-slate-800">
-                <div className="flex flex-wrap w-full xl:w-auto p-2.5 gap-2 bg-slate-800/40">
-                  <button 
-                    onClick={() => setViewMode('passport')}
-                    className={`flex-1 xl:flex-none px-6 py-4 rounded-2xl font-bold flex items-center justify-center gap-2.5 transition-all duration-300 ${viewMode === 'passport' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-                  >
-                    <Icon name="Maximize" size={20} /> Layihə Pasportu
-                  </button>
-                  <button 
-                    onClick={() => setViewMode('house')}
-                    className={`flex-1 xl:flex-none px-6 py-4 rounded-2xl font-bold flex items-center justify-center gap-2.5 transition-all duration-300 ${viewMode === 'house' ? 'bg-amber-600 text-white shadow-lg shadow-amber-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-                  >
-                    <Icon name="Hammer" size={20} /> Tikinti İcrası & Smeta
-                  </button>
-                  <button 
-                    onClick={() => setViewMode('dashboard')}
-                    className={`flex-1 xl:flex-none px-6 py-4 rounded-2xl font-bold flex items-center justify-center gap-2.5 transition-all duration-300 ${viewMode === 'dashboard' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/50' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-                  >
-                    <Icon name="LayoutDashboard" size={20} /> Analitika & Təchizat
-                  </button>
-                </div>
+            <div key={i} className={`flex flex-col p-3 rounded-xl border ${item.highlight ? 'bg-indigo-950/60 border-indigo-700/50' : 'bg-slate-800/40 border-slate-700/40'}`}>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{item.label}</span>
+              <span className={`mono text-sm font-semibold whitespace-pre-line ${item.highlight ? 'text-indigo-200' : 'text-slate-200'}`}>{item.val}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
-                <div className="p-5 xl:p-6 xl:pl-10 w-full xl:w-auto flex items-center justify-between xl:justify-end gap-6 xl:gap-10 border-t xl:border-t-0 border-slate-800 text-white">
-                  <div className="hidden sm:block text-right">
-                    <p className="text-[11px] text-slate-400 font-bold uppercase tracking-[0.2em] mb-1.5">MİNİMUM BAZAR BÜDCƏSİ</p>
-                    <p className="text-sm font-semibold text-slate-300 bg-slate-800 px-3 py-1 rounded-full border border-slate-700">
-                      Tikinti {formatMoney(totalConstruction)} + Mebel {formatMoney(totalFurniture)}
-                    </p>
+function PassportView() {
+  const total = PASSPORT.areas.reduce((s,r)=>s+r.area,0);
+  return (
+    <div className="max-w-7xl mx-auto space-y-6 fadeup">
+      {/* Room areas summary */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+          <div className="px-5 py-3 bg-indigo-900/50 flex items-center gap-2.5 border-b border-indigo-800/40">
+            <Icon name="LayoutDashboard" size={18} className="text-indigo-300"/>
+            <h3 className="font-bold text-white text-sm uppercase tracking-widest">Otaq Sahə Bölgüsü</h3>
+            <span className="ml-auto mono text-xs text-indigo-300 bg-indigo-900/60 px-2.5 py-1 rounded-lg border border-indigo-700/40">CƏMİ: {total.toFixed(2)} m²</span>
+          </div>
+          <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-3">
+            {PASSPORT.areas.map((r,i) => (
+              <div key={i} className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3 hover:border-slate-500/60 transition-colors group">
+                <div className="text-xs text-slate-400 font-medium mb-1.5 group-hover:text-slate-300 transition-colors">{r.name}</div>
+                <div className="mono text-xl font-bold text-white">{r.area.toFixed(2)} <span className="text-sm font-normal text-slate-400">m²</span></div>
+                <div className="text-[10px] text-slate-500 mt-1.5 leading-tight">{r.note}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-3">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Layihə Ünvanı</p>
+            <p className="font-bold text-white text-base">Novxanı Bağ Massivi</p>
+            <p className="text-slate-400 text-sm mono">Ev № 1071</p>
+          </div>
+          <div className="bg-indigo-950 border border-indigo-800/50 rounded-2xl p-5">
+            <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-2">Xalis Faydalı Sahə</p>
+            <p className="mono text-4xl font-black text-white">90.00 <span className="text-xl text-indigo-300">m²</span></p>
+          </div>
+          <div className="bg-slate-900 border border-amber-800/30 rounded-2xl p-5">
+            <p className="text-[10px] font-bold text-amber-400 uppercase tracking-widest mb-2">Tavan Hündürlüyü (Xalis)</p>
+            <p className="mono text-3xl font-black text-white">3.40 <span className="text-xl text-amber-300">m</span></p>
+          </div>
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Minimum Büdcə (Bazar Qiymətinə görə)</p>
+            <p className="mono text-2xl font-black text-emerald-400">{fmt(GRAND_TOTAL)}</p>
+          </div>
+        </div>
+      </div>
+      <PassportSection title="Ümumi Layihə Məlumatları" icon="FileText" color="bg-slate-700" items={PASSPORT.general}/>
+      <PassportSection title="Bünövrə — Texniki Ölçülər və Xüsusiyyətlər" icon="Layers" color="bg-stone-700" items={PASSPORT.foundation}/>
+      <PassportSection title="Xarici Daşıyıcı Divarlar (40sm Qoşa Hörgü)" icon="Building" color="bg-amber-700" items={PASSPORT.walls_ext}/>
+      <PassportSection title="Daxili Arakəsmə Divarlar + Seysmik Kəmər" icon="Columns" color="bg-amber-600" items={PASSPORT.walls_int}/>
+      <PassportSection title="Pəncərə və Qapı Açıqları" icon="DoorOpen" color="bg-sky-700" items={PASSPORT.openings}/>
+      <PassportSection title="Dam Konstruksiyası — Ölçü və Materiallar" icon="Home" color="bg-red-700" items={PASSPORT.roof}/>
+      <PassportSection title="Mühəndis Kommunikasiyaları (MEP)" icon="Zap" color="bg-orange-700" items={PASSPORT.mep}/>
+    </div>
+  );
+}
+
+// ─────────────────── HOUSE (TIKINTI PLAN) VIEW ───────────────────
+function HouseView() {
+  const [activeSection, setActiveSection] = useState('masonry');
+  const [activeTab, setActiveTab] = useState('sequence');
+  const [checked, setChecked] = useState({});
+  const toggleCheck = id => setChecked(p=>({...p,[id]:!p[id]}));
+  const ad = CONSTRUCTION_DATA[activeSection];
+
+  return (
+    <div className="max-w-7xl mx-auto fadeup">
+      <div className="mb-4">
+        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 ml-1">Kateqoriya seçin</p>
+        <div className="flex overflow-x-auto gap-2 pb-2 scrollbar snap-x">
+          {Object.entries(CONSTRUCTION_DATA).map(([key,d]) => (
+            <button key={key} onClick={()=>{setActiveSection(key);setActiveTab('sequence');}}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm whitespace-nowrap snap-start transition-all duration-200 border ${activeSection===key?'bg-indigo-600 text-white border-indigo-500':'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-600 hover:text-white'}`}>
+              <Icon name={d.icon} size={16}/>{d.title}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+        {/* Left: SVG Blueprint */}
+        <div className="xl:col-span-5 space-y-5 order-2 xl:order-1">
+          {/* Budget Summary */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Büdcə Bölgüsü (Minimum Qiymət)</p>
+            <div className="space-y-2">
+              {Object.entries(CONSTRUCTION_DATA).map(([key,d])=>{
+                const pct = (d.cost/GRAND_TOTAL)*100;
+                return (
+                  <div key={key} className={`flex items-center gap-3 cursor-pointer p-2 rounded-xl transition-colors ${activeSection===key?'bg-slate-800':'hover:bg-slate-800/50'}`}
+                    onClick={()=>setActiveSection(key)}>
+                    <div className="w-24 shrink-0 text-xs font-medium text-slate-400 truncate">{d.title}</div>
+                    <div className="flex-1 bg-slate-800 rounded-full h-2">
+                      <div className={d.color+' h-2 rounded-full transition-all duration-500'} style={{width:pct+'%'}}/>
+                    </div>
+                    <div className="mono text-xs text-slate-300 w-20 text-right">{fmt(d.cost)}</div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700 shadow-inner">
-                      <Icon name="Wallet" className="text-emerald-400" size={28} />
+                );
+              })}
+              <div className="border-t border-slate-700 pt-2 flex justify-between items-center">
+                <span className="text-xs font-bold text-emerald-400">YEKUN</span>
+                <span className="mono font-black text-emerald-400 text-lg">{fmt(GRAND_TOTAL)}</span>
+              </div>
+            </div>
+          </div>
+          {/* SVG */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-center relative overflow-hidden min-h-[420px]">
+            <svg viewBox="0 0 800 620" className="w-full h-full max-w-lg select-none">
+              {/* Garden */}
+              <g onClick={()=>setActiveSection('exterior')} className="cursor-pointer group">
+                <rect x="20" y="500" width="760" height="100" rx="14" className={activeSection==='exterior'?'fill-emerald-900/80':'fill-emerald-950/50'} />
+                <path d="M70 500 L110 500 L90 430 Z" fill={activeSection==='exterior'?'#059669':'#064e3b'} opacity="0.8"/>
+                <path d="M130 500 L165 500 L148 450 Z" fill={activeSection==='exterior'?'#10b981':'#065f46'} opacity="0.7"/>
+                <path d="M695 500 L740 500 L717 432 Z" fill={activeSection==='exterior'?'#059669':'#064e3b'} opacity="0.8"/>
+                <text x="320" y="556" fill={activeSection==='exterior'?'#a7f3d0':'#6ee7b7'} fontSize="18" fontWeight="bold">Fasad & Həyət Abadlığı</text>
+              </g>
+              {/* Pool */}
+              <g onClick={()=>setActiveSection('pool')} className="cursor-pointer group">
+                <ellipse cx="610" cy="548" rx="110" ry="38" fill={activeSection==='pool'?'#0e7490':'#164e63'} stroke={activeSection==='pool'?'#22d3ee':'#0284c7'} strokeWidth="3"/>
+                <path d="M535 548 Q 610 525 685 548" stroke="#fff" strokeWidth="3" fill="none" opacity="0.3"/>
+                <text x="565" y="555" fill="#a5f3fc" fontSize="14" fontWeight="bold">{activeSection==='pool'?'6×3 Hovuz':''}</text>
+              </g>
+              {/* Foundation */}
+              <g onClick={()=>setActiveSection('foundation')} className="cursor-pointer">
+                <path d="M200 482 L560 482 L570 500 L190 500 Z" fill={activeSection==='foundation'?'#334155':'#1e293b'} stroke="#475569" strokeWidth="2"/>
+                {activeSection==='foundation' && <text x="280" y="495" fill="#f1f5f9" fontSize="14" fontWeight="bold">Bünövrə / Kürsü</text>}
+              </g>
+              {/* Main walls */}
+              <g onClick={()=>setActiveSection('masonry')} className="cursor-pointer">
+                <path d="M200 260 L560 260 L560 482 L200 482 Z" fill={activeSection==='masonry'?'#78350f20':'#0f172a'} stroke={activeSection==='masonry'?'#d97706':'#334155'} strokeWidth={activeSection==='masonry'?'8':'6'}/>
+                {[290,330,370,410,450].map(y=><line key={y} x1="200" y1={y} x2="560" y2={y} stroke="#1e293b" strokeWidth="2" opacity="0.8"/>)}
+                {activeSection==='masonry' && <text x="290" y="295" fill="#fcd34d" fontSize="18" fontWeight="bold">Daşıyıcı Divarlar</text>}
+              </g>
+              {/* Plumbing */}
+              <g onClick={()=>setActiveSection('plumbing')} className="cursor-pointer">
+                <rect x="455" y="310" width="85" height="160" fill={activeSection==='plumbing'?'#164e6380':'#0c4a6e30'} stroke={activeSection==='plumbing'?'#22d3ee':'#0369a1'} strokeWidth="3" strokeDasharray="8,4"/>
+                <circle cx="497" cy="360" r="12" fill={activeSection==='plumbing'?'#0e7490':'#164e63'} opacity="0.8"/>
+                <path d="M497 372 L497 445" stroke="#22d3ee" strokeWidth="3" opacity="0.6"/>
+                {activeSection==='plumbing' && <text x="425" y="302" fill="#a5f3fc" fontSize="12" fontWeight="bold">Sanitar Blok</text>}
+              </g>
+              {/* Electro */}
+              <g onClick={()=>setActiveSection('electro_heating')} className="cursor-pointer">
+                <rect x="244" y="310" width="75" height="160" fill={activeSection==='electro_heating'?'#7c290920':'#431407'} stroke={activeSection==='electro_heating'?'#fb923c':'#c2410c'} strokeWidth="3" strokeDasharray="8,4"/>
+                {[400,415,430,445].map((y,i)=><rect key={i} x="255" y={y} width="8" height="25" rx="2" fill={activeSection==='electro_heating'?'#fb923c':'#c2410c'} opacity="0.7"/>)}
+                {activeSection==='electro_heating' && <text x="244" y="302" fill="#fdba74" fontSize="11" fontWeight="bold">Elektrik+İstilik</text>}
+              </g>
+              {/* Doors & Windows */}
+              <g onClick={()=>setActiveSection('doors_windows')} className="cursor-pointer">
+                <rect x="338" y="320" width="90" height="155" fill={activeSection==='doors_windows'?'#1e3a5f':'#0f1f33'} stroke={activeSection==='doors_windows'?'#38bdf8':'#0369a1'} strokeWidth="4"/>
+                <circle cx="350" cy="398" r="5" fill={activeSection==='doors_windows'?'#7dd3fc':'#93c5fd'}/>
+                <rect x="255" y="270" width="42" height="30" rx="3" fill={activeSection==='doors_windows'?'#bae6fd30':'#7dd3fc10'} stroke={activeSection==='doors_windows'?'#38bdf8':'#0369a1'} strokeWidth="3"/>
+                <rect x="462" y="270" width="42" height="30" rx="3" fill={activeSection==='doors_windows'?'#bae6fd30':'#7dd3fc10'} stroke={activeSection==='doors_windows'?'#38bdf8':'#0369a1'} strokeWidth="3"/>
+                {activeSection==='doors_windows' && <text x="330" y="395" fill="#7dd3fc" fontSize="13" fontWeight="bold">Qapı/Pəncərə</text>}
+              </g>
+              {/* Interior */}
+              <g onClick={()=>setActiveSection('interior')} className="cursor-pointer">
+                <rect x="340" y="265" width="80" height="50" fill={activeSection==='interior'?'#1e3a8a30':'transparent'} stroke="transparent"/>
+                {activeSection==='interior' && <text x="295" y="310" fill="#93c5fd" fontSize="16" fontWeight="bold">Daxili Təmir</text>}
+              </g>
+              {/* Furniture */}
+              <g onClick={()=>setActiveSection('furniture')} className="cursor-pointer">
+                <rect x="336" y="430" width="88" height="40" rx="8" fill={activeSection==='furniture'?'#5b21b6':'#2e1065'} stroke={activeSection==='furniture'?'#a78bfa':'#4c1d95'} strokeWidth="3"/>
+                <rect x="346" y="418" width="68" height="18" rx="5" fill={activeSection==='furniture'?'#7c3aed':'#3b0764'} stroke={activeSection==='furniture'?'#c4b5fd':'#6d28d9'} strokeWidth="2"/>
+                {activeSection==='furniture' && <text x="348" y="456" fill="#e9d5ff" fontSize="12" fontWeight="bold">Mebel</text>}
+              </g>
+              {/* Roof */}
+              <g onClick={()=>setActiveSection('roof')} className="cursor-pointer">
+                <path d="M170 260 L380 95 L590 260 Z" fill={activeSection==='roof'?'#7f1d1d':'#450a0a'} stroke={activeSection==='roof'?'#ef4444':'#7f1d1d'} strokeWidth="5" strokeLinejoin="round"/>
+                {activeSection==='roof' && <text x="320" y="215" fill="#fca5a5" fontSize="22" fontWeight="bold">Dam</text>}
+              </g>
+            </svg>
+          </div>
+        </div>
+
+        {/* Right: Details */}
+        <div className="xl:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col h-[920px] order-1 xl:order-2">
+          <div className={`${ad.color} px-6 py-6 text-white shrink-0 relative overflow-hidden`}>
+            <div className="absolute right-0 top-0 opacity-5 transform translate-x-1/4 -translate-y-1/4 scale-150 pointer-events-none">
+              <Icon name={ad.icon} size={260}/>
+            </div>
+            <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start gap-5">
+              <div>
+                <h2 className="text-2xl lg:text-3xl font-extrabold flex items-center gap-3">
+                  <Icon name={ad.icon} size={32} className="opacity-90 shrink-0"/> {ad.title}
+                </h2>
+                <p className="text-white/75 text-sm mt-1.5 max-w-md leading-relaxed">{ad.description}</p>
+              </div>
+              <div className="bg-black/20 px-5 py-3.5 rounded-2xl border border-white/10 backdrop-blur-md shrink-0">
+                <p className="text-white/70 text-[10px] font-bold uppercase tracking-widest mb-1">Minimum Qiymət</p>
+                <p className="mono text-2xl lg:text-3xl font-black">{fmt(ad.cost)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex border-b border-slate-800 bg-slate-900/80 shrink-0 overflow-x-auto scrollbar">
+            {[{id:'sequence',label:'İş Ardıcıllığı',icon:'ListOrdered',ac:'text-indigo-400 border-indigo-500'},{id:'checklist',label:'QC Yoxlanış',icon:'ListChecks',ac:'text-rose-400 border-rose-500'},{id:'costs',label:'Smeta Riyaziyyatı',icon:'Receipt',ac:'text-emerald-400 border-emerald-500'}].map(t=>(
+              <button key={t.id} onClick={()=>setActiveTab(t.id)}
+                className={'flex-1 py-3.5 px-4 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all duration-200 whitespace-nowrap ' + (activeTab===t.id ? 'bg-slate-800/80 '+t.ac+' border-b-2' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/40')}>
+                <Icon name={t.icon} size={16}/>{t.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="p-5 flex-1 overflow-y-auto scrollbar bg-slate-950/30">
+            {/* SEQUENCE */}
+            {activeTab==='sequence' && (
+              <div className="fadeup space-y-0">
+                <div className="relative border-l-2 border-slate-700 ml-4 space-y-8 pb-4">
+                  {ad.sequence.map((step,idx)=>(
+                    <div key={idx} className="relative pl-8">
+                      <span className="absolute -left-[19px] top-1 bg-slate-800 border-2 border-slate-600 text-slate-200 w-9 h-9 rounded-full flex items-center justify-center font-black text-sm shadow-lg">
+                        {idx+1}
+                      </span>
+                      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden hover:border-slate-700 transition-colors">
+                        <div className="p-5 md:p-6">
+                          <h4 className="font-extrabold text-white text-lg md:text-xl mb-3 flex items-center gap-2">
+                            {step.title}
+                          </h4>
+                          <p className="text-slate-300 leading-relaxed text-sm mb-4">{step.desc}</p>
+                          {step.calcBasis && (
+                            <div className="bg-indigo-950/60 rounded-xl p-4 border border-indigo-800/40 mb-4 relative overflow-hidden">
+                              <div className="absolute left-0 top-0 w-1 h-full bg-indigo-500"/>
+                              <h5 className="font-bold text-indigo-300 mb-2 flex items-center gap-2 text-sm">
+                                <Icon name="Calculator" size={16}/> Hesablama Əsası
+                              </h5>
+                              <pre className="text-indigo-200/80 text-xs leading-loose whitespace-pre-wrap font-mono">{step.calcBasis}</pre>
+                            </div>
+                          )}
+                          {step.materialsData && step.materialsData.length>0 && (
+                            <div className="bg-slate-800/60 rounded-xl p-4 border border-slate-700/40">
+                              <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                <Icon name="Package" size={14}/> Bu mərhələ materialları
+                              </h5>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {step.materialsData.map((m,i)=>(
+                                  <div key={i} className="bg-slate-900 p-3 rounded-xl border border-slate-700/40">
+                                    <div className="font-semibold text-slate-200 text-sm mb-1">{m.name}</div>
+                                    <div className="text-[11px] text-slate-400">{m.use}</div>
+                                    <div className="mono text-xs text-indigo-400 mt-1 bg-indigo-950/40 px-2 py-0.5 rounded-md inline-block">{m.qty}</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="bg-slate-800/50 px-5 py-3.5 border-t border-slate-800 flex flex-wrap items-center gap-2.5">
+                          <span className="bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
+                            <Icon name="Package" size={14}/> Material: {fmt(step.materialCost)}
+                          </span>
+                          <span className="bg-amber-950/60 text-amber-400 border border-amber-800/40 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5">
+                            <Icon name="Hammer" size={14}/> Usta: {fmt(step.laborCost)}
+                          </span>
+                          <span className="bg-slate-700 text-white px-4 py-1.5 rounded-lg text-xs font-black mono ml-auto">
+                            = {fmt(step.materialCost+step.laborCost)}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[11px] text-emerald-400 font-bold uppercase tracking-[0.2em] mb-1">YEKUN (GÜZƏŞTLİ)</p>
-                      <p className="text-2xl lg:text-4xl font-black font-mono text-white tracking-tight">{formatMoney(grandTotal)}</p>
-                    </div>
+                  ))}
+                </div>
+                <div className="bg-red-950/50 border border-red-800/40 rounded-2xl p-5 flex gap-4 mt-4">
+                  <div className="bg-red-900/50 p-2.5 rounded-xl shrink-0 text-red-400"><Icon name="AlertTriangle" size={28}/></div>
+                  <div>
+                    <h4 className="font-black text-red-300 text-xs uppercase tracking-widest mb-1.5">Kritik Xəbərdarlıq</h4>
+                    <p className="text-red-200/80 text-sm leading-relaxed">{ad.warnings}</p>
                   </div>
                 </div>
               </div>
+            )}
 
-              {/* 1. LAYİHƏ PASPORTU VIEW (NEW MAIN) */}
-              {viewMode === 'passport' && (
-                <div className="max-w-7xl mx-auto space-y-6 fade-in">
-                  
-                  <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="bg-indigo-600 text-white p-6 md:p-8 flex items-center justify-between">
-                      <div>
-                        <h2 className="text-2xl md:text-3xl font-extrabold flex items-center gap-3"><Icon name="Maximize" size={32} /> Novxanı 1071 - Layihə Pasportu və Ölçülər</h2>
-                        <p className="text-indigo-100 font-medium mt-2">Mühəndislik və arxitektura ölçülərinin dəqiq xülasəsi</p>
-                      </div>
-                      <span className="hidden md:flex bg-indigo-800/50 px-4 py-2 rounded-xl border border-indigo-500 font-black font-mono text-2xl tracking-tight shadow-inner">
-                        90.00 m² NET
+            {/* CHECKLIST */}
+            {activeTab==='checklist' && (
+              <div className="fadeup space-y-6">
+                {ad.checks.project && (
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-300 mb-3 flex items-center gap-2 pb-2 border-b border-slate-800">
+                      <span className="bg-indigo-900/60 text-indigo-400 p-1.5 rounded-lg"><Icon name="Ruler" size={16}/></span>
+                      Layihə / Dizayn Uyğunluğu
+                    </h3>
+                    <ul className="space-y-2">
+                      {ad.checks.project.map((c,i)=>{
+                        const id=`${ad.id}-proj-${i}`,chk=checked[id];
+                        return (
+                          <li key={id} onClick={()=>toggleCheck(id)}
+                            className={`flex gap-3 p-3.5 rounded-xl border cursor-pointer transition-all duration-200 ${chk?'bg-indigo-950/60 border-indigo-700/40':'bg-slate-900 border-slate-800 hover:border-slate-600'}`}>
+                            <div className="mt-0.5 shrink-0">
+                              {chk ? <Icon name="CheckCircle" className="text-indigo-400" size={20}/> : <Icon name="Circle" className="text-slate-600" size={20}/>}
+                            </div>
+                            <span className={`text-sm leading-relaxed transition-all ${chk?'text-indigo-300/50 line-through':'text-slate-300'}`}>{c}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+                {ad.checks.engineering && (
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-300 mb-3 flex items-center gap-2 pb-2 border-b border-slate-800">
+                      <span className="bg-emerald-900/60 text-emerald-400 p-1.5 rounded-lg"><Icon name="HardHat" size={16}/></span>
+                      Mühəndis İcra Tələbləri
+                    </h3>
+                    <ul className="space-y-2">
+                      {ad.checks.engineering.map((c,i)=>{
+                        const id=`${ad.id}-eng-${i}`,chk=checked[id];
+                        return (
+                          <li key={id} onClick={()=>toggleCheck(id)}
+                            className={`flex gap-3 p-3.5 rounded-xl border cursor-pointer transition-all duration-200 ${chk?'bg-emerald-950/60 border-emerald-700/40':'bg-slate-900 border-slate-800 hover:border-slate-600'}`}>
+                            <div className="mt-0.5 shrink-0">
+                              {chk ? <Icon name="CheckCircle" className="text-emerald-400" size={20}/> : <Icon name="Circle" className="text-slate-600" size={20}/>}
+                            </div>
+                            <span className={`text-sm leading-relaxed ${chk?'text-emerald-300/50 line-through':'text-slate-300'}`}>{c}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+                {ad.checks.standards && (
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-300 mb-3 flex items-center gap-2 pb-2 border-b border-slate-800">
+                      <span className="bg-sky-900/60 text-sky-400 p-1.5 rounded-lg"><Icon name="Shield" size={16}/></span>
+                      Standartlar (SNiP / AZS)
+                    </h3>
+                    <ul className="space-y-2">
+                      {ad.checks.standards.map((c,i)=>{
+                        const id=`${ad.id}-std-${i}`,chk=checked[id];
+                        return (
+                          <li key={id} onClick={()=>toggleCheck(id)}
+                            className={`flex gap-3 p-3.5 rounded-xl border cursor-pointer transition-all duration-200 ${chk?'bg-sky-950/60 border-sky-700/40':'bg-slate-900 border-slate-800 hover:border-slate-600'}`}>
+                            <div className="mt-0.5 shrink-0">
+                              {chk ? <Icon name="CheckCircle" className="text-sky-400" size={20}/> : <Icon name="Circle" className="text-slate-600" size={20}/>}
+                            </div>
+                            <span className={`text-sm leading-relaxed ${chk?'text-sky-300/50 line-through':'text-slate-300'}`}>{c}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* COSTS */}
+            {activeTab==='costs' && (
+              <div className="fadeup space-y-3">
+                {ad.subCosts.map((sub,i)=>(
+                  <div key={i} className="flex flex-col xl:flex-row xl:items-center justify-between p-4 bg-slate-900 border border-slate-800 rounded-xl hover:border-slate-700 transition-colors gap-3">
+                    <div className="flex-1">
+                      <span className="font-bold text-slate-200 flex items-center gap-2 text-base mb-1">
+                        <span className="w-2 h-2 rounded-full bg-slate-500 shrink-0"/>
+                        {sub.name}
                       </span>
+                      <p className="text-xs text-slate-500 ml-4 leading-relaxed">{sub.desc}</p>
                     </div>
-                    
-                    <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      
-                      {/* Bünövrə info */}
-                      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                        <div className="bg-slate-200/50 text-slate-700 w-12 h-12 rounded-xl flex items-center justify-center mb-4"><Icon name="Map" size={24} /></div>
-                        <h4 className="font-bold text-slate-900 text-lg mb-4 border-b border-slate-200 pb-2">Bünövrə və Torpaq (Fundament)</h4>
-                        <ul className="space-y-3 text-sm font-medium text-slate-600">
-                          <li className="flex justify-between"><span>Xətti Uzunluq (Paqon metr):</span> <span className="font-black text-slate-900">67 pm</span></li>
-                          <li className="flex justify-between"><span>Lentvari Təməl Eni:</span> <span className="font-black text-slate-900">0.40 metr</span></li>
-                          <li className="flex justify-between"><span>Bünövrə Oturma Sahəsi:</span> <span className="font-black text-slate-900">26.8 m²</span></li>
-                          <li className="flex justify-between"><span>Mexaniki Qazıntı Həcmi:</span> <span className="font-black text-slate-900">17 m³</span></li>
-                        </ul>
-                      </div>
-
-                      {/* Divar info */}
-                      <div className="bg-amber-50 p-6 rounded-2xl border border-amber-200">
-                        <div className="bg-amber-200/50 text-amber-700 w-12 h-12 rounded-xl flex items-center justify-center mb-4"><Icon name="Home" size={24} /></div>
-                        <h4 className="font-bold text-amber-900 text-lg mb-4 border-b border-amber-200 pb-2">Daşıyıcı Divarlar və Hündürlük</h4>
-                        <ul className="space-y-3 text-sm font-medium text-amber-800">
-                          <li className="flex justify-between"><span>Xalis Tavan Hündürlüyü:</span> <span className="font-black bg-amber-200/50 px-2 rounded">3.40 m</span></li>
-                          <li className="flex justify-between"><span>Xarici Divar (Qoşa - 40sm):</span> <span className="font-black">156 m²</span></li>
-                          <li className="flex justify-between"><span>Daxili Divar (Tək - 20sm):</span> <span className="font-black">117 m²</span></li>
-                          <li className="flex justify-between"><span>Daxili Divar Xətti Uzunluğu:</span> <span className="font-black">~34.4 pm</span></li>
-                        </ul>
-                      </div>
-
-                      {/* Qapı Pəncərə */}
-                      <div className="bg-sky-50 p-6 rounded-2xl border border-sky-200">
-                        <div className="bg-sky-200/50 text-sky-700 w-12 h-12 rounded-xl flex items-center justify-center mb-4"><Icon name="DoorClosed" size={24} /></div>
-                        <h4 className="font-bold text-sky-900 text-lg mb-4 border-b border-sky-200 pb-2">Qapı və Pəncərə Xülasəsi</h4>
-                        <ul className="space-y-3 text-sm font-medium text-sky-800">
-                          <li className="flex justify-between"><span>Xarici Pəncərə Cəmi:</span> <span className="font-black">34.00 m²</span></li>
-                          <li className="flex justify-between"><span>Giriş Çelik Qapı (100x210):</span> <span className="font-black">1 ədəd</span></li>
-                          <li className="flex justify-between"><span>Otaq MDF Qapı (90x210):</span> <span className="font-black">6 ədəd</span></li>
-                          <li className="flex justify-between"><span>Sanuzel PVC (80x210):</span> <span className="font-black">1 ədəd</span></li>
-                        </ul>
-                      </div>
-
-                      {/* Dam və Fasad */}
-                      <div className="bg-emerald-50 p-6 rounded-2xl border border-emerald-200">
-                        <div className="bg-emerald-200/50 text-emerald-700 w-12 h-12 rounded-xl flex items-center justify-center mb-4"><Icon name="Home" size={24} /></div>
-                        <h4 className="font-bold text-emerald-900 text-lg mb-4 border-b border-emerald-200 pb-2">Dam və Fasad Ölçüləri</h4>
-                        <ul className="space-y-3 text-sm font-medium text-emerald-800">
-                          <li className="flex justify-between"><span>Damın Ümumi Sahəsi (Karnizlər):</span> <span className="font-black">125 m²</span></li>
-                          <li className="flex justify-between"><span>Dam Örtüyü Profnastil:</span> <span className="font-black">0.45mm</span></li>
-                          <li className="flex justify-between"><span>Fasad Suvaq/Boya Səthi:</span> <span className="font-black">214 m²</span></li>
-                          <li className="flex justify-between"><span>Həyət Abadlıq (Tamet):</span> <span className="font-black">80 m²</span></li>
-                        </ul>
-                      </div>
-
-                      {/* Otaq Sahələri */}
-                      <div className="lg:col-span-2 bg-slate-900 p-6 rounded-2xl border border-slate-800 text-white">
-                        <h4 className="font-bold text-slate-100 text-lg mb-4 flex items-center gap-2"><Icon name="Maximize" size={20}/> Otaqların Xalis Sahə (NET) Bölgüsü</h4>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                          <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700 flex justify-between items-center"><span className="text-slate-400">Mətbəx</span> <span className="font-black">17.82 m²</span></div>
-                          <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700 flex justify-between items-center"><span className="text-slate-400">Zal (Qonaq)</span> <span className="font-black">12.76 m²</span></div>
-                          <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700 flex justify-between items-center"><span className="text-slate-400">Yataq Otağı 1</span> <span className="font-black">11.52 m²</span></div>
-                          <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700 flex justify-between items-center"><span className="text-slate-400">Yataq Otağı 2</span> <span className="font-black">9.60 m²</span></div>
-                          <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700 flex justify-between items-center"><span className="text-slate-400">Yataq Otağı 3</span> <span className="font-black">11.20 m²</span></div>
-                          <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700 flex justify-between items-center"><span className="text-slate-400">Ümumi Sanuzel</span> <span className="font-black">4.38 m²</span></div>
-                          <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700 flex justify-between items-center"><span className="text-slate-400">Yataq Sanuzel</span> <span className="font-black">3.04 m²</span></div>
-                          <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700 flex justify-between items-center"><span className="text-slate-400">Çamaşırxana</span> <span className="font-black">2.24 m²</span></div>
-                          <div className="bg-indigo-900/40 p-3 rounded-xl border border-indigo-700/50 flex justify-between items-center"><span className="text-indigo-300">Dəhliz/Hol</span> <span className="font-black text-indigo-100">~17.44 m²</span></div>
-                        </div>
-                      </div>
-
-                    </div>
+                    <span className="mono font-black text-slate-100 bg-slate-800 px-4 py-2 rounded-xl border border-slate-700 whitespace-nowrap self-start xl:self-auto">
+                      {fmt(sub.amount)}
+                    </span>
                   </div>
+                ))}
+                <div className="p-5 bg-slate-900 border border-emerald-800/40 rounded-xl flex justify-between items-center mt-4">
+                  <div className="flex items-center gap-2.5">
+                    <Icon name="CheckCircle" className="text-emerald-400" size={22}/>
+                    <span className="font-bold text-slate-300 text-sm">Bu Mərhələ Minimum Bazar Dəyəri</span>
+                  </div>
+                  <span className="mono font-black text-emerald-400 text-2xl">{fmt(ad.cost)}</span>
                 </div>
-              )}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-              {/* 2. TİKİNTİ İCRASI VIEW */}
-              {viewMode === 'house' && (
-                <div className="max-w-7xl mx-auto fade-in">
-                  
-                  <div className="mb-4">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">Sürətli Keçid (Kateqoriyalar)</p>
-                    <div className="flex overflow-x-auto gap-3 pb-2 custom-scrollbar snap-x">
-                      {Object.entries(CONSTRUCTION_DATA).map(([key, data]) => (
-                        <button
-                          key={key}
-                          onClick={() => setActiveSection(key)}
-                          className={`flex items-center gap-2 px-4 py-3 rounded-xl font-bold whitespace-nowrap snap-start transition-all duration-300 border shadow-sm ${
-                            activeSection === key 
-                              ? 'bg-amber-500 text-white border-amber-600 ring-2 ring-amber-200' 
-                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100 hover:text-slate-900'
-                          }`}
-                        >
-                          <Icon name={data.icon} size={18} /> 
-                          {data.title}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+// ─────────────────── DASHBOARD VIEW ───────────────────
+function DashboardView() {
+  const [taskFilter, setTaskFilter] = useState('all');
+  const [matSearch, setMatSearch] = useState('');
+  const [matTab, setMatTab] = useState('materials');
 
-                  <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-                    
-                    {/* Interactive SVG */}
-                    <div className="xl:col-span-5 flex flex-col gap-6 order-2 xl:order-1">
-                      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-4 flex items-center justify-center relative overflow-hidden min-h-[450px] xl:h-[950px]">
-                        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-100 via-white to-slate-50 opacity-80 pointer-events-none"></div>
-                        <svg viewBox="0 0 800 650" className="w-full h-full max-w-lg drop-shadow-2xl select-none relative z-10 transition-transform duration-700 hover:scale-[1.01]">
-                          <g onClick={() => setActiveSection('exterior')} className="cursor-pointer group">
-                            <rect x="20" y="530" width="760" height="110" rx="15" className={`${activeSection === 'exterior' ? 'fill-emerald-500' : 'fill-emerald-100'} transition-colors duration-300`} />
-                            <path d="M80 530 L130 530 L105 440 Z" fill="#047857" className="opacity-70 group-hover:opacity-100 transition-opacity" />
-                            <path d="M140 530 L180 530 L160 470 Z" fill="#059669" className="opacity-70 group-hover:opacity-100 transition-opacity" />
-                            <path d="M690 530 L740 530 L715 440 Z" fill="#047857" className="opacity-70 group-hover:opacity-100 transition-opacity" />
-                            {activeSection === 'exterior' && <text x="50" y="590" className="fill-emerald-900 font-bold text-3xl">Fasad & Həyət</text>}
-                          </g>
+  const phases = [...new Set(ALL_TASKS.map(t=>t.phase))];
+  const filteredTasks = ALL_TASKS.filter(t => taskFilter==='all' || t.phase===taskFilter || t.priority===taskFilter);
 
-                          <g onClick={() => setActiveSection('pool')} className="cursor-pointer group">
-                            <ellipse cx="600" cy="580" rx="120" ry="45" className={`${activeSection === 'pool' ? 'fill-teal-500' : 'fill-teal-100'} transition-colors duration-300 stroke-slate-200 stroke-[4]`} />
-                            <path d="M520 580 Q 600 550 680 580" stroke="#fff" strokeWidth="4" fill="none" className="opacity-40" />
-                            <path d="M540 595 Q 600 575 660 595" stroke="#fff" strokeWidth="2" fill="none" className="opacity-30" />
-                            {activeSection === 'pool' && <text x="555" y="588" className="fill-teal-900 font-bold text-2xl">Hovuz</text>}
-                          </g>
+  const prioColors = {critical:'bg-red-900/60 text-red-300 border-red-700/40',high:'bg-amber-900/60 text-amber-300 border-amber-700/40',medium:'bg-blue-900/60 text-blue-300 border-blue-700/40'};
+  const prioLabels = {critical:'KRİTİK',high:'YÜKSƏK',medium:'ORTA'};
 
-                          <g onClick={() => setActiveSection('foundation')} className="cursor-pointer group">
-                            <path d="M200 500 L560 500 L560 530 C 560 535 555 540 550 540 L210 540 C 205 540 200 535 200 530 Z" className={`${activeSection === 'foundation' ? 'fill-slate-700' : 'fill-slate-300'} transition-colors duration-300`} />
-                            <rect x="220" y="490" width="320" height="10" className="fill-slate-400" />
-                            {activeSection === 'foundation' && <text x="290" y="525" className="fill-white font-bold text-2xl">Bünövrə / Kürsü</text>}
-                          </g>
+  const filteredMats = MATERIALS_DATA.map(cat=>({
+    ...cat, items: cat.items.filter(i=>i.name.toLowerCase().includes(matSearch.toLowerCase()))
+  })).filter(cat=>cat.items.length>0);
 
-                          <g onClick={() => setActiveSection('masonry')} className="cursor-pointer group">
-                            <path d="M220 280 L540 280 L540 490 L220 490 Z" className={`${activeSection === 'masonry' ? 'fill-amber-500/20' : 'fill-slate-50'} stroke-slate-300 stroke-[8] transition-colors duration-300`} />
-                            <line x1="220" y1="330" x2="540" y2="330" stroke="#cbd5e1" strokeWidth="2" opacity="0.6" />
-                            <line x1="220" y1="380" x2="540" y2="380" stroke="#cbd5e1" strokeWidth="2" opacity="0.6" />
-                            <line x1="220" y1="430" x2="540" y2="430" stroke="#cbd5e1" strokeWidth="2" opacity="0.6" />
-                            <rect x="220" y="276" width="320" height="16" className="fill-slate-400 opacity-90" />
-                            {activeSection === 'masonry' && <text x="310" y="315" className="fill-amber-900 font-bold text-2xl">Daşıyıcı Divarlar</text>}
-                          </g>
+  const filteredLabor = LABOR_DATA.map(cat=>({
+    ...cat, items: cat.items.filter(i=>i.name.toLowerCase().includes(matSearch.toLowerCase()))
+  })).filter(cat=>cat.items.length>0);
 
-                          <g onClick={() => setActiveSection('plumbing')} className="cursor-pointer group">
-                            <rect x="440" y="340" width="80" height="140" className={`${activeSection === 'plumbing' ? 'fill-cyan-200' : 'fill-slate-100'} transition-colors duration-300 stroke-cyan-600 stroke-[3] stroke-dasharray-4`} />
-                            <path d="M460 450 L500 450 L500 470 C500 475 460 475 460 470 Z" className="fill-cyan-500 opacity-50" />
-                            <circle cx="480" cy="380" r="10" className="fill-cyan-400 opacity-70" />
-                            <line x1="480" y1="380" x2="480" y2="450" stroke="#06b6d4" strokeWidth="3" opacity="0.5" />
-                            {activeSection === 'plumbing' && <text x="445" y="365" className="fill-cyan-900 font-bold text-sm">Sanitar/Su</text>}
-                          </g>
+  const totalTasksByPhase = phases.map(p=>({phase:p, count:ALL_TASKS.filter(t=>t.phase===p).length}));
 
-                          <g onClick={() => setActiveSection('electro_heating')} className="cursor-pointer group">
-                            <rect x="240" y="340" width="70" height="140" className={`${activeSection === 'electro_heating' ? 'fill-orange-200' : 'fill-slate-100'} transition-colors duration-300 stroke-orange-500 stroke-[3] stroke-dasharray-4`} />
-                            <rect x="250" y="420" width="10" height="40" rx="2" className="fill-orange-400 opacity-70" />
-                            <rect x="265" y="420" width="10" height="40" rx="2" className="fill-orange-400 opacity-70" />
-                            <rect x="280" y="420" width="10" height="40" rx="2" className="fill-orange-400 opacity-70" />
-                            {activeSection === 'electro_heating' && <text x="245" y="365" className="fill-orange-900 font-bold text-[11px]">Elektrik/İstilik</text>}
-                          </g>
-
-                          <g onClick={() => setActiveSection('doors_windows')} className="cursor-pointer group">
-                            <rect x="340" y="350" width="80" height="140" className={`${activeSection === 'doors_windows' ? 'fill-sky-400' : 'fill-slate-200'} transition-colors duration-300 stroke-slate-500 stroke-[4]`} />
-                            <circle cx="355" cy="420" r="5" fill="#475569" />
-                            <rect x="460" y="295" width="40" height="35" rx="2" className={`${activeSection === 'doors_windows' ? 'fill-sky-300' : 'fill-white'} transition-colors duration-300 stroke-slate-400 stroke-[4]`} />
-                            <rect x="255" y="295" width="40" height="35" rx="2" className={`${activeSection === 'doors_windows' ? 'fill-sky-300' : 'fill-white'} transition-colors duration-300 stroke-slate-400 stroke-[4]`} />
-                            {activeSection === 'doors_windows' && <text x="330" y="450" className="fill-sky-900 font-bold text-xl drop-shadow-md bg-white px-1">Qapı / Pəncərə</text>}
-                          </g>
-
-                          <g onClick={() => setActiveSection('interior')} className="cursor-pointer group">
-                            <rect x="320" y="290" width="120" height="50" className={`${activeSection === 'interior' ? 'fill-blue-200' : 'fill-transparent'} transition-colors duration-300`} />
-                            <rect x="340" y="340" width="80" height="10" className={`${activeSection === 'interior' ? 'fill-blue-300' : 'fill-transparent'} transition-colors duration-300`} />
-                            {activeSection === 'interior' && <text x="335" y="320" className="fill-blue-900 font-bold text-lg drop-shadow-md">Təmir İşləri</text>}
-                          </g>
-
-                          <g onClick={() => setActiveSection('furniture')} className="cursor-pointer group">
-                            <rect x="340" y="450" width="80" height="35" rx="6" className={`${activeSection === 'furniture' ? 'fill-purple-500' : 'fill-slate-300'} transition-colors duration-300 stroke-slate-500 stroke-[2]`} />
-                            <rect x="350" y="435" width="60" height="20" rx="4" className={`${activeSection === 'furniture' ? 'fill-purple-400' : 'fill-slate-200'} transition-colors duration-300`} />
-                            {activeSection === 'furniture' && <text x="355" y="473" className="fill-purple-100 font-bold text-sm">Mebel</text>}
-                          </g>
-
-                          <g onClick={() => setActiveSection('roof')} className="cursor-pointer group">
-                            <path d="M180 280 L380 120 L580 280 Z" className={`${activeSection === 'roof' ? 'fill-red-600' : 'fill-red-400'} transition-colors duration-300 stroke-red-800 stroke-[6] stroke-linejoin-round`} />
-                            {activeSection === 'roof' && <text x="350" y="240" className="fill-white font-bold text-3xl drop-shadow-md">Dam</text>}
-                          </g>
-                        </svg>
-
-                        <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-md px-4 py-2 rounded-full text-[11px] font-bold text-amber-700 shadow-sm border border-amber-100 flex items-center gap-2 cursor-default">
-                          <Icon name="Info" size={16} /> Diaqrama toxunun
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Details Panel */}
-                    <div className="xl:col-span-7 bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[850px] xl:h-[950px] order-1 xl:order-2">
-                      <div className={`${activeData.color} px-6 py-6 md:px-8 md:py-8 text-white transition-colors duration-500 shrink-0 relative overflow-hidden shadow-inner`}>
-                        <div className="absolute right-0 top-0 opacity-10 transform translate-x-1/4 -translate-y-1/4 scale-150 pointer-events-none">
-                           <Icon name={activeData.icon} size={240} />
-                        </div>
-                        <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start gap-6">
-                          <div>
-                            <h2 className="text-3xl lg:text-4xl font-extrabold tracking-tight flex items-center gap-4">
-                              <Icon name={activeData.icon} size={36} className="drop-shadow-lg shrink-0" /> {activeData.title}
-                            </h2>
-                            <p className="text-white/90 text-sm md:text-base mt-2 font-medium max-w-lg leading-relaxed">
-                              {activeData.description}
-                            </p>
-                          </div>
-                          <div className="bg-white/10 px-6 py-4 rounded-2xl backdrop-blur-md border border-white/20 text-left sm:text-right w-full sm:w-auto shadow-xl shrink-0">
-                            <p className="text-white/80 text-[11px] font-bold uppercase tracking-[0.2em] mb-1.5">Kategoriya Üzrə Minimum Xərc</p>
-                            <p className="text-3xl lg:text-4xl font-black font-mono tracking-tight">{formatMoney(activeData.cost)}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex border-b border-slate-200 bg-slate-50 shrink-0 overflow-x-auto custom-scrollbar">
-                        <button 
-                          onClick={() => setActiveTab('sequence')}
-                          className={`flex-1 py-4 px-4 font-bold text-sm flex items-center justify-center gap-2.5 transition-all duration-300 whitespace-nowrap ${activeTab === 'sequence' ? 'bg-white text-indigo-600 border-b-2 border-indigo-600 shadow-[inset_0_4px_0_0_rgba(79,70,229,0.05)]' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'}`}
-                        >
-                          <Icon name="ListOrdered" size={20} /> İş Ardıcıllığı & Analiz
-                        </button>
-                        <button 
-                          onClick={() => setActiveTab('checklist')}
-                          className={`flex-1 py-4 px-4 font-bold text-sm flex items-center justify-center gap-2.5 transition-all duration-300 whitespace-nowrap ${activeTab === 'checklist' ? 'bg-white text-rose-600 border-b-2 border-rose-600 shadow-[inset_0_4px_0_0_rgba(225,29,72,0.05)]' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'}`}
-                        >
-                          <Icon name="ListChecks" size={20} /> Standart Yoxlanışı (QC)
-                        </button>
-                        <button 
-                          onClick={() => setActiveTab('costs')}
-                          className={`flex-1 py-4 px-4 font-bold text-sm flex items-center justify-center gap-2.5 transition-all duration-300 whitespace-nowrap ${activeTab === 'costs' ? 'bg-white text-emerald-700 border-b-2 border-emerald-700 shadow-[inset_0_4px_0_0_rgba(4,120,87,0.05)]' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'}`}
-                        >
-                          <Icon name="Receipt" size={20} /> Detallı Smeta Riyaziyyatı
-                        </button>
-                      </div>
-
-                      <div className="p-5 md:p-8 flex-1 overflow-y-auto bg-slate-50 custom-scrollbar relative">
-                        {/* TAB 1: SEQUENCE */}
-                        {activeTab === 'sequence' && (
-                          <div className="fade-in">
-                            <div className="relative border-l-2 border-slate-300 ml-3 md:ml-5 space-y-8 md:space-y-10 pb-4">
-                              {activeData.sequence.map((step, index) => (
-                                <div key={index} className="relative pl-6 md:pl-10">
-                                  <span className="absolute -left-[17px] md:-left-[19px] top-1 bg-slate-800 text-white w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center font-black text-sm shadow-md ring-4 ring-slate-50 border border-slate-900">
-                                    {index + 1}
-                                  </span>
-                                  <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all group">
-                                    <div className="p-6 md:p-8">
-                                      <h4 className="font-extrabold text-slate-900 text-xl md:text-2xl mb-4 flex items-center gap-2">
-                                        {step.title}
-                                      </h4>
-                                      <p className="text-slate-600 leading-relaxed font-medium mb-6 text-[15px]">
-                                        {step.desc}
-                                      </p>
-                                      {step.calcBasis && (
-                                        <div className="bg-gradient-to-br from-indigo-50 to-blue-50/30 rounded-2xl p-5 md:p-6 border border-indigo-100 mb-6 shadow-sm relative overflow-hidden">
-                                          <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500"></div>
-                                          <h5 className="font-black text-indigo-900 mb-3 flex items-center gap-2 text-base">
-                                            <Icon name="Calculator" size={20} className="text-indigo-600" /> Vahid x Miqdar = Minimum Qiymət
-                                          </h5>
-                                          <div className="font-mono text-indigo-900/90 font-bold leading-loose text-sm md:text-[14px] whitespace-pre-line bg-white/50 p-3 rounded-xl border border-indigo-100/50">
-                                            {step.calcBasis}
-                                          </div>
-                                        </div>
-                                      )}
-                                      {step.materialsData && (
-                                        <div className="bg-slate-50 rounded-2xl p-5 md:p-6 border border-slate-200 mt-4">
-                                          <h5 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2">
-                                            <Icon name="Package" size={18} className="text-slate-500" /> Tələb Olunan Əsas Sərfiyyat:
-                                          </h5>
-                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
-                                            {step.materialsData.map((mat, i) => (
-                                              <div key={i} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between hover:border-slate-300 transition-colors">
-                                                <div className="font-bold text-slate-800 text-[15px] mb-2">{mat.name}</div>
-                                                <div className="flex flex-col gap-2 mt-auto">
-                                                  <span className="font-black text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg text-sm self-start inline-block">
-                                                    Miqdar: {mat.qty}
-                                                  </span>
-                                                  <span className="text-xs text-slate-500 font-bold bg-slate-100 px-2 py-1 rounded inline-block self-start">Cəmi: {mat.use}</span>
-                                                </div>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                    <div className="bg-slate-100/50 p-5 border-t border-slate-200 flex flex-wrap items-center gap-3">
-                                      <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2 rounded-xl text-xs md:text-sm font-bold flex items-center gap-2 shadow-sm">
-                                        <Icon name="Package" size={16} /> Material: {formatMoney(step.materialCost)}
-                                      </span>
-                                      <span className="bg-amber-50 text-amber-800 border border-amber-200 px-4 py-2 rounded-xl text-xs md:text-sm font-bold flex items-center gap-2 shadow-sm">
-                                        <Icon name="Hammer" size={16} /> Usta/Texnika: {formatMoney(step.laborCost)}
-                                      </span>
-                                      <span className="bg-slate-900 text-emerald-400 px-5 py-2 rounded-xl text-xs md:text-sm font-black font-mono ml-auto shadow-md border border-slate-700">
-                                        YEKUN: {formatMoney(step.materialCost + step.laborCost)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                            <div className="bg-red-50 border border-red-200 rounded-3xl p-6 md:p-8 flex flex-col sm:flex-row gap-5 items-start shadow-sm mt-10">
-                              <div className="bg-red-100 p-3 rounded-2xl shrink-0 text-red-600 shadow-inner">
-                                <Icon name="AlertTriangle" size={32} />
-                              </div>
-                              <div>
-                                <h4 className="font-black text-red-900 text-sm uppercase tracking-widest mb-2">Kritik Təhlükəsizlik və Keyfiyyət Xəbərdarlığı</h4>
-                                <p className="text-red-800 font-semibold text-[15px] leading-relaxed">{activeData.warnings}</p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* TAB 2: CHECKLIST */}
-                        {activeTab === 'checklist' && (
-                          <div className="space-y-8 fade-in bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
-                            {activeData.checks.project && (
-                              <div>
-                                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-3 border-b border-slate-100 pb-2">
-                                  <div className="bg-indigo-100 text-indigo-600 p-2 rounded-lg"><Icon name="Ruler" size={20} /></div>
-                                  Layihəyə və Dizayna Uyğunluq
-                                </h3>
-                                <ul className="space-y-3">
-                                  {activeData.checks.project.map((check, index) => {
-                                    const id = `${activeData.id}-proj-${index}`;
-                                    const isChecked = checkedItems[id];
-                                    return (
-                                      <li key={id} onClick={() => toggleCheck(id)} className={`flex gap-4 p-4 rounded-2xl border transition-all duration-300 cursor-pointer ${isChecked ? 'bg-indigo-50/50 border-indigo-200' : 'bg-white border-slate-200 hover:border-indigo-300 hover:shadow-sm'}`}>
-                                        <div className="mt-0.5 shrink-0">
-                                          {isChecked ? <Icon name="CheckCircle" className="text-indigo-600" size={24} /> : <Icon name="CircleDashed" className="text-slate-300" size={24} />}
-                                        </div>
-                                        <span className={`font-medium text-[15px] leading-relaxed transition-all duration-300 ${isChecked ? 'text-indigo-900/60 line-through' : 'text-slate-700'}`}>{check}</span>
-                                      </li>
-                                    );
-                                  })}
-                                </ul>
-                              </div>
-                            )}
-                            {activeData.checks.engineering && (
-                              <div>
-                                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-3 border-b border-slate-100 pb-2">
-                                  <div className="bg-emerald-100 text-emerald-600 p-2 rounded-lg"><Icon name="HardHat" size={20} /></div>
-                                  Mühəndislik və İcra Tələbləri
-                                </h3>
-                                <ul className="space-y-3">
-                                  {activeData.checks.engineering.map((check, index) => {
-                                    const id = `${activeData.id}-eng-${index}`;
-                                    const isChecked = checkedItems[id];
-                                    return (
-                                      <li key={id} onClick={() => toggleCheck(id)} className={`flex gap-4 p-4 rounded-2xl border transition-all duration-300 cursor-pointer ${isChecked ? 'bg-emerald-50/50 border-emerald-200' : 'bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm'}`}>
-                                        <div className="mt-0.5 shrink-0">
-                                          {isChecked ? <Icon name="CheckCircle" className="text-emerald-600" size={24} /> : <Icon name="CircleDashed" className="text-slate-300" size={24} />}
-                                        </div>
-                                        <span className={`font-medium text-[15px] leading-relaxed transition-all duration-300 ${isChecked ? 'text-emerald-900/60 line-through' : 'text-slate-700'}`}>{check}</span>
-                                      </li>
-                                    );
-                                  })}
-                                </ul>
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* TAB 3: COSTS */}
-                        {activeTab === 'costs' && (
-                          <div className="fade-in">
-                            <div className="space-y-4 mb-8">
-                              {activeData.subCosts.map((sub, index) => (
-                                <div key={index} className="flex flex-col xl:flex-row xl:justify-between xl:items-center p-5 bg-white hover:bg-slate-50 hover:shadow-md rounded-2xl border border-slate-200 transition-all duration-300 gap-4">
-                                  <div className="flex-1">
-                                    <span className="font-bold text-slate-800 flex items-center gap-3 text-lg mb-1">
-                                      <span className="w-2 h-2 rounded-full bg-indigo-400 shrink-0"></span>
-                                      {sub.name}
-                                    </span>
-                                    <p className="text-sm font-medium text-slate-500 ml-5 leading-relaxed pr-4">
-                                      {sub.desc}
-                                    </p>
-                                  </div>
-                                  <span className="font-black font-mono text-indigo-700 bg-indigo-50 px-5 py-2.5 rounded-xl border border-indigo-100 whitespace-nowrap self-start xl:self-auto text-lg">
-                                    {formatMoney(sub.amount)}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                            
-                            <div className="p-6 bg-slate-900 text-white rounded-2xl shadow-xl flex flex-col sm:flex-row justify-between items-center gap-4 border border-slate-800 mt-6">
-                              <div className="flex items-center gap-3">
-                                <Icon name="CheckCircle" className="text-emerald-400" size={24} />
-                                <span className="font-bold uppercase tracking-widest text-xs lg:text-sm text-slate-300">Minimum Topdan Qiymətlərlə CƏMİ</span>
-                              </div>
-                              <span className="font-black text-2xl lg:text-3xl font-mono text-emerald-400">
-                                {formatMoney(activeData.subCosts.reduce((acc, curr) => acc + curr.amount, 0))}
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* 3. ANALİTİKA VƏ TƏCHİZAT */}
-              {viewMode === 'dashboard' && (
-                <div className="max-w-7xl mx-auto fade-in space-y-6">
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-5 hover:shadow-md transition-shadow duration-300">
-                      <div className="bg-indigo-50 text-indigo-600 p-4 rounded-2xl border border-indigo-100"><Icon name="TrendingUp" size={28} /></div>
-                      <div><p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Xalis Tikinti Xərci</p><p className="text-2xl font-black text-slate-900 font-mono">{formatMoney(totalConstruction)}</p></div>
-                    </div>
-                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-5 hover:shadow-md transition-shadow duration-300">
-                      <div className="bg-purple-50 text-purple-600 p-4 rounded-2xl border border-purple-100"><Icon name="Package" size={28} /></div>
-                      <div><p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Mebel & Texnika</p><p className="text-2xl font-black text-slate-900 font-mono">{formatMoney(totalFurniture)}</p></div>
-                    </div>
-                    <div className="bg-slate-900 p-6 rounded-3xl shadow-lg border border-slate-800 flex items-center gap-5 transform hover:scale-[1.02] transition-transform cursor-default">
-                      <div className="bg-emerald-500/20 text-emerald-400 p-4 rounded-2xl border border-emerald-500/30"><Icon name="Wallet" size={28} /></div>
-                      <div><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">QÜSURSUZ YEKUN BÜDCƏ</p><p className="text-2xl font-black text-emerald-400 font-mono">{formatMoney(grandTotal)}</p></div>
-                    </div>
-                    <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-5 hover:shadow-md transition-shadow duration-300">
-                      <div className="bg-amber-50 text-amber-600 p-4 rounded-2xl border border-amber-100"><Icon name="ClipboardList" size={28} /></div>
-                      <div><p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Aktiv Tapşırıqlar</p><p className="text-2xl font-black text-slate-900 font-mono">1 <span className="text-base text-slate-400">/ 4</span></p></div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* TASKS */}
-                    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 xl:p-8 flex flex-col h-full">
-                      <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
-                        <h3 className="text-2xl font-extrabold text-slate-900 flex items-center gap-3">
-                          <Icon name="ClipboardList" className="text-indigo-600" size={28} /> İcraçı Tapşırıqları (PM)
-                        </h3>
-                        <span className="bg-indigo-50 text-indigo-700 font-bold px-3 py-1 rounded-lg text-xs uppercase tracking-widest">Workflow</span>
-                      </div>
-                      <div className="space-y-4 flex-1">
-                        {TASKS.map(task => (
-                          <div key={task.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-5 border border-slate-100 rounded-2xl bg-slate-50 hover:bg-white hover:border-slate-300 hover:shadow-sm transition-all duration-300 gap-4">
-                            <div className="flex gap-4 items-center">
-                              {task.status === 'completed' ? <Icon name="CheckCircle" className="text-emerald-500 shrink-0" size={28} /> : 
-                               task.status === 'progress' ? <Icon name="CircleDashed" className="text-amber-500 animate-spin-slow shrink-0" size={28} /> : 
-                               <Icon name="CircleDashed" className="text-slate-300 shrink-0" size={28} />}
-                              <div>
-                                <p className="font-bold text-slate-800 text-base">{task.name}</p>
-                                <p className="text-sm text-slate-500 font-medium mt-1">Məsul: <span className="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded">{task.owner}</span></p>
-                              </div>
-                            </div>
-                            <div className="text-left sm:text-right w-full sm:w-auto mt-2 sm:mt-0 pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-                              <span className={`inline-block px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                                task.status === 'completed' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
-                                task.status === 'progress' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-slate-200 text-slate-600 border border-slate-300'
-                              }`}>
-                                {task.status === 'completed' ? 'Tamamlanıb' : task.status === 'progress' ? 'İcrada' : 'Gözləmədə'}
-                              </span>
-                              <p className="text-xs text-slate-400 mt-2 font-semibold">{task.date}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* VENDORS */}
-                    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 xl:p-8 flex flex-col h-full">
-                      <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
-                        <h3 className="text-2xl font-extrabold text-slate-900 flex items-center gap-3">
-                          <Icon name="Truck" className="text-emerald-600" size={28} /> Təchizat: Minimum Bazar
-                        </h3>
-                        <span className="bg-emerald-50 text-emerald-700 font-bold px-3 py-1 rounded-lg text-xs uppercase tracking-widest">Sədərək/Dərnəgül/Sex</span>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1 content-start overflow-y-auto pr-2 custom-scrollbar max-h-[500px]">
-                        {VENDORS.map((v, i) => (
-                          <div key={i} className="p-5 border border-slate-100 rounded-2xl bg-white shadow-sm hover:border-emerald-300 hover:shadow-md transition-all duration-300 flex flex-col justify-between relative overflow-hidden">
-                            <div className="absolute -right-6 -top-6 bg-emerald-50 w-16 h-16 rounded-full opacity-50"></div>
-                            <div>
-                              <p className="text-sm font-bold text-slate-600 mb-1.5 leading-snug">{v.name}</p>
-                              <div className="flex items-end gap-2">
-                                <p className="text-2xl font-black font-mono text-emerald-600">{v.price}</p>
-                                <p className="text-sm text-slate-400 font-sans font-medium mb-1">/ {v.unit}</p>
-                              </div>
-                            </div>
-                            <div className="mt-4 pt-3 border-t border-slate-50 flex items-center justify-between">
-                              <span className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100">
-                                Topdan MİNİMUM
-                              </span>
-                              <span className="text-xs font-bold text-slate-400 line-through decoration-red-400/50">
-                                {v.oldPrice}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+  return (
+    <div className="max-w-7xl mx-auto space-y-6 fadeup">
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          {label:'Xalis Tikinti', val:fmt(TOTAL_CONSTRUCTION), icon:'TrendingUp', color:'text-blue-400', bg:'bg-blue-900/30 border-blue-800/40'},
+          {label:'Mebel+Texnika', val:fmt(TOTAL_FURNITURE), icon:'Package', color:'text-purple-400', bg:'bg-purple-900/30 border-purple-800/40'},
+          {label:'MİNİMUM YEKUN', val:fmt(GRAND_TOTAL), icon:'Wallet', color:'text-emerald-400', bg:'bg-emerald-900/30 border-emerald-800/40'},
+          {label:'Cəmi PM Tapşırığı', val:`${ALL_TASKS.length} tapşırıq`, icon:'ClipboardList', color:'text-amber-400', bg:'bg-amber-900/30 border-amber-800/40'},
+        ].map((c,i)=>(
+          <div key={i} className={`bg-slate-900 border ${c.bg} rounded-2xl p-5 flex items-center gap-4`}>
+            <div className={`${c.color} opacity-80`}><Icon name={c.icon} size={28}/></div>
+            <div>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">{c.label}</p>
+              <p className={`mono text-lg font-black ${c.color}`}>{c.val}</p>
             </div>
-          );
-        }
+          </div>
+        ))}
+      </div>
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* TASKS */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col" style={{maxHeight:'820px'}}>
+          <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+            <h3 className="font-bold text-white flex items-center gap-2.5">
+              <Icon name="ClipboardList" className="text-indigo-400" size={22}/> Layihə Meneceri Tapşırıqları
+            </h3>
+            <span className="mono text-xs text-indigo-400 bg-indigo-950/60 px-2.5 py-1 rounded-lg border border-indigo-800/40">{ALL_TASKS.length} tapşırıq</span>
+          </div>
+          <div className="px-4 py-3 border-b border-slate-800 flex gap-2 overflow-x-auto scrollbar">
+            <button onClick={()=>setTaskFilter('all')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${taskFilter==='all'?'bg-slate-700 text-white':'text-slate-500 hover:text-slate-300'}`}>Hamısı ({ALL_TASKS.length})</button>
+            {phases.map(p=>(
+              <button key={p} onClick={()=>setTaskFilter(p)} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${taskFilter===p?'bg-slate-700 text-white':'text-slate-500 hover:text-slate-300'}`}>
+                {p.split('(')[0].trim()}
+              </button>
+            ))}
+            <button onClick={()=>setTaskFilter('critical')} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${taskFilter==='critical'?'bg-red-900/60 text-red-300 border border-red-700/40':'text-slate-500 hover:text-red-400'}`}>Kritik</button>
+          </div>
+          <div className="overflow-y-auto scrollbar flex-1">
+            {filteredTasks.map(task=>(
+              <div key={task.id} className="px-4 py-3.5 border-b border-slate-800/60 hover:bg-slate-800/30 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className="mono text-xs text-slate-600 mt-0.5 shrink-0 w-6 text-right">{task.id}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-200 leading-tight mb-1.5">{task.name}</p>
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border ${prioColors[task.priority]}`}>{prioLabels[task.priority]}</span>
+                      <span className="text-[10px] text-slate-500 font-medium">Həftə: <span className="text-slate-400">{task.week}</span></span>
+                      <span className="text-[10px] text-slate-500 font-medium">Məsul: <span className="text-slate-300">{task.owner}</span></span>
+                    </div>
+                    {task.notes && <p className="text-[10px] text-amber-500/70 mt-1 italic">{task.notes}</p>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* SUPPLY PRICES */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col" style={{maxHeight:'820px'}}>
+          <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+            <h3 className="font-bold text-white flex items-center gap-2.5">
+              <Icon name="Truck" className="text-emerald-400" size={22}/> Bazar Qiymətləri (Novxanı)
+            </h3>
+            <span className="text-[10px] text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded-lg border border-emerald-800/40 font-bold">MİNİMUM QİYMƏTLƏR</span>
+          </div>
+          <div className="px-4 pt-3 border-b border-slate-800 pb-3 space-y-2">
+            <input value={matSearch} onChange={e=>setMatSearch(e.target.value)} placeholder="Material axtarın..." className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 outline-none focus:border-slate-500"/>
+            <div className="flex gap-2">
+              <button onClick={()=>setMatTab('materials')} className={`flex-1 py-2 rounded-xl text-xs font-bold ${matTab==='materials'?'bg-emerald-900/60 text-emerald-300 border border-emerald-700/40':'text-slate-500 bg-slate-800/50'}`}>Material Qiymətləri</button>
+              <button onClick={()=>setMatTab('labor')} className={`flex-1 py-2 rounded-xl text-xs font-bold ${matTab==='labor'?'bg-amber-900/60 text-amber-300 border border-amber-700/40':'text-slate-500 bg-slate-800/50'}`}>Usta/İş Qiymətləri</button>
+            </div>
+          </div>
+          <div className="overflow-y-auto scrollbar flex-1 p-3 space-y-4">
+            {(matTab==='materials' ? filteredMats : filteredLabor).map((cat,ci)=>(
+              <div key={ci}>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2 px-1">{cat.cat}</p>
+                <div className="space-y-1.5">
+                  {cat.items.map((item,ii)=>{
+                    const saving = ((item.regPrice-item.minPrice)/item.regPrice*100).toFixed(0);
+                    return (
+                      <div key={ii} className="bg-slate-800/50 border border-slate-700/40 rounded-xl px-4 py-3 flex items-center justify-between gap-3 hover:border-slate-600/60 transition-colors">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-slate-200 truncate">{item.name}</p>
+                          {item.source && <p className="text-[10px] text-slate-500 truncate mt-0.5">{item.source}</p>}
+                        </div>
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <div className="text-right">
+                            <div className="mono text-xs text-slate-500 line-through">{item.regPrice.toFixed(2)}</div>
+                            <div className="mono font-black text-emerald-400 text-sm">{item.minPrice.toFixed(2)} ₼</div>
+                            <div className="text-[10px] text-slate-400">{item.unit}</div>
+                          </div>
+                          <span className="bg-emerald-950/80 text-emerald-400 border border-emerald-800/40 text-[10px] font-black px-2 py-0.5 rounded-lg mono">-{saving}%</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────── MAIN APP ───────────────────
+function App() {
+  const [view, setView] = useState('passport');
+
+  const tabs = [
+    {id:'passport', label:'Layihə Pasportu', icon:'FileText', ac:'bg-indigo-600'},
+    {id:'house', label:'Tikinti Planı & Nəzarət', icon:'Map', ac:'bg-slate-600'},
+    {id:'dashboard', label:'Analitika & Təchizat', icon:'LayoutDashboard', ac:'bg-emerald-600'},
+  ];
+
+  return (
+    <div className="min-h-screen pb-24 px-3 md:px-6 pt-4">
+      {/* Top bar */}
+      <div className="max-w-7xl mx-auto mb-6">
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-2 flex flex-col xl:flex-row items-center gap-3">
+          <div className="flex items-center gap-4 px-3 py-1.5 shrink-0 order-last xl:order-first">
+            <div className="bg-slate-800 p-2.5 rounded-xl border border-slate-700">
+              <Icon name="Building2" className="text-indigo-400" size={24}/>
+            </div>
+            <div>
+              <p className="font-black text-white text-base leading-tight">Novxanı 1071</p>
+              <p className="text-[10px] text-slate-500 font-mono">ERP TİKİNTİ PANELİ · 2025–2026</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap justify-center gap-2 flex-1">
+            {tabs.map(t=>(
+              <button key={t.id} onClick={()=>setView(t.id)}
+                className={'flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-sm transition-all duration-200 ' + (view===t.id ? t.ac+' text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800')}>
+                <Icon name={t.icon} size={18}/>{t.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 px-4 border-l border-slate-800 shrink-0">
+            <div className="text-right">
+              <p className="text-[9px] font-bold text-emerald-500 uppercase tracking-widest">Minimum Büdcə</p>
+              <p className="mono text-xl font-black text-white">{fmt(GRAND_TOTAL)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {view==='passport' && <PassportView/>}
+      {view==='house' && <HouseView/>}
+      {view==='dashboard' && <DashboardView/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
 </body>
 </html>
